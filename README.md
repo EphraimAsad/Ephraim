@@ -2,7 +2,7 @@
 
 **A Senior-Engineer Terminal Coding Agent**
 
-[![Version](https://img.shields.io/badge/version-0.1.1-blue.svg)](https://github.com/yourusername/ephraim)
+[![Version](https://img.shields.io/badge/version-0.1.1-blue.svg)](https://github.com/EphraimAsad/ephraim)
 [![Python](https://img.shields.io/badge/python-3.10+-green.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
@@ -53,7 +53,7 @@ ollama pull qwen2.5-coder:14b   # Capable execution model
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/ephraim.git
+git clone https://github.com/EphraimAsad/ephraim.git
 cd ephraim
 
 # Install in development mode
