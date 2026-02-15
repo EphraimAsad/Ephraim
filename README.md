@@ -1,84 +1,274 @@
 # Ephraim
 
-## Senior-Engineer Terminal Coding Agent
+**A Senior-Engineer Terminal Coding Agent**
 
-Ephraim is a terminal-first, local, Git-aware, CI-aware agentic coding system that behaves like a **senior software engineer**.
+Ephraim is a terminal-first, local, Git-aware, CI-aware agentic coding system that behaves like a **senior software engineer**. It plans before it acts, asks for approval before making changes, and integrates with your existing development workflow.
+
+## Features
+
+- **Plan-First Approach** - Proposes a full execution plan before making any changes
+- **Human Approval Required** - No code changes without your explicit approval
+- **Git-Aware** - Understands your repository state, branches, and staged changes
+- **CI-Aware** - Monitors GitHub Actions and responds to CI failures
+- **Local & Private** - Runs entirely on your machine using Ollama (no data sent to cloud)
+- **Patch-Based Edits** - Makes surgical, targeted changes instead of rewriting files
+- **Live Output** - Streams command output in real-time
+- **Session Memory** - Tracks progress in Context.md for continuity across sessions
 
 ## Design Philosophy
 
-- **Safety > Speed** - Human approval required before code changes
-- **Architecture Preservation > Rewrites** - Minimal, targeted edits
-- **Incremental Change > Large Refactors** - Patch-based modifications
-- **Real System Feedback > Speculation** - Uses actual test/CI results
-- **Human Oversight Required** - No autonomous execution
+| Principle | Implementation |
+|-----------|----------------|
+| **Safety > Speed** | Human approval required before code changes |
+| **Architecture Preservation > Rewrites** | Minimal, targeted patch-based edits |
+| **Incremental Change > Large Refactors** | One step at a time with verification |
+| **Real System Feedback > Speculation** | Uses actual test/CI results to guide decisions |
+| **Human Oversight Required** | No autonomous execution of dangerous operations |
 
-## Current Status
+## Requirements
 
-**Phase 1: Foundation** - COMPLETE
-
-Core infrastructure implemented:
-- [x] Project structure
-- [x] Package configuration (pyproject.toml)
-- [x] State object model (state.py)
-- [x] Configuration system (config.py)
-- [x] Logging system (logging_setup.py)
-- [x] Boot sequence (boot.py)
-- [x] CLI entry point (main.py)
-
-**Phase 2: Tool Layer** - COMPLETE
-
-All tools implemented:
-- [x] Base tool class (base.py)
-- [x] read_file tool - Read files with line numbers
-- [x] list_directory tool - List directory contents
-- [x] apply_patch tool - Patch engine with safety checks
-- [x] run_command tool - Live streaming command execution
-- [x] ask_user tool - User interaction/approval
-- [x] final_answer tool - Task completion
-- [x] git_tools - Status, diff, commit, add
-- [x] ci_tools - GitHub Actions integration
-
-**Phase 3: State Manager** - COMPLETE
-
-State management implemented:
-- [x] Phase enforcement (allowed tools per phase)
-- [x] Approval gating
-- [x] LLM brief builder
-- [x] Action history tracking
-
-**Phase 4: LLM Interface** - COMPLETE
-
-Ollama integration implemented:
-- [x] System prompt with JSON schema
-- [x] Response parsing and validation
-- [x] Retry logic for invalid JSON
-- [x] Streaming support
-
-**Phase 5-8: Agent Loop** - COMPLETE
-
-Full agent workflow implemented:
-- [x] Planning phase with full-goal plans
-- [x] Approval workflow
-- [x] Tool execution with phase enforcement
-- [x] Git integration
-- [x] CI monitoring
-- [x] Context.md auto-update
+- **Python 3.10+**
+- **Ollama** - Local LLM server ([ollama.ai](https://ollama.ai))
+- **Git** - Version control
+- **GitHub CLI** (`gh`) - Optional, for CI integration
 
 ## Installation
 
+### 1. Install Ollama
+
+Download and install Ollama from [ollama.ai](https://ollama.ai).
+
 ```bash
-# Clone or navigate to the project directory
-cd Ephraim
+# Pull a coding model (recommended: llama3.1 or qwen2.5-coder)
+ollama pull llama3.1:8b
+
+# Or for better performance with more VRAM:
+ollama pull qwen2.5-coder:14b
+```
+
+### 2. Install Ephraim
+
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/ephraim.git
+cd ephraim
 
 # Install in development mode
 pip install -e .
+
+# Or install with dev dependencies for testing
+pip install -e ".[dev]"
 ```
 
-## Usage
+### 3. (Optional) Install GitHub CLI
+
+For CI integration features:
 
 ```bash
+# Windows (winget)
+winget install GitHub.cli
+
+# macOS
+brew install gh
+
+# Linux
+# See https://github.com/cli/cli/blob/trunk/docs/install_linux.md
+
+# Authenticate
+gh auth login
+```
+
+## Quick Start
+
+```bash
+# Navigate to your project
+cd your-project
+
 # Launch Ephraim
 Ephraim
+```
+
+Ephraim will:
+1. Detect your Git repository root
+2. Create `Ephraim.md` (project configuration) if it doesn't exist
+3. Create `Context.md` (session memory) if it doesn't exist
+4. Connect to Ollama and verify the model is available
+5. Wait for your task input
+
+### Example Session
+
+```
+╭──────────────────────────────────────────────────────────╮
+│  EPHRAIM - Senior Engineer Terminal Agent               │
+╰──────────────────────────────────────────────────────────╯
+>>> Phase: BOOT
+Repository root: C:\Projects\my-app
+Ollama connected. Model: llama3.1:8b
+────────────────────────────────────────────────────────────
+Enter your task, or type 'quit' to exit.
+────────────────────────────────────────────────────────────
+Ephraim> Add input validation to the user registration form
+
+>>> Phase: PLANNING
+Confidence: 85% (HIGH)
+Risk Level: MEDIUM
+
+╭─────────────────── Execution Plan ───────────────────────╮
+│ Goal: Add input validation to user registration form    │
+│                                                          │
+│ Steps:                                                   │
+│   1. Read the current registration form component        │
+│   2. Identify input fields that need validation          │
+│   3. Add email format validation                         │
+│   4. Add password strength requirements                  │
+│   5. Add error message display                           │
+│   6. Test the validation logic                           │
+╰──────────────────────────────────────────────────────────╯
+
+Approve plan? (y/n): y
+Plan approved. Executing...
+
+>>> Step 1/6: Read the current registration form component
+    Tool: read_file
+    File: src/components/RegisterForm.tsx
+    Success: Read 45 lines
+
+>>> Step 2/6: Identify input fields...
+```
+
+## Configuration
+
+### Ephraim.md
+
+Created automatically in your project root. Customize to set project-specific rules:
+
+```markdown
+# Ephraim.md - Project Configuration
+
+## Architecture Constraints
+- Use React functional components with hooks
+- State management via Redux Toolkit
+- API calls through RTK Query
+
+## Coding Standards
+- TypeScript strict mode
+- ESLint + Prettier formatting
+- Jest for unit tests
+
+## Protected Areas
+- Do not modify: config/, .env files
+- Require extra approval: auth/, payment/
+
+## Validation Expectations
+- All PRs must pass CI
+- Test coverage > 80%
+
+## Git Rules
+- Conventional commits (feat:, fix:, etc.)
+- No direct commits to main
+```
+
+### Context.md
+
+Automatically maintained by Ephraim to track session progress:
+
+```markdown
+# Current Task
+Add input validation to user registration form
+
+# Phase
+executing
+
+# Active Plan
+Goal: Add input validation to user registration form
+Steps:
+  1. Read the current registration form component
+  2. Identify input fields that need validation
+  3. Add email format validation
+  ...
+
+# Recent Decisions
+- 2024-01-15T10:30:00: read_file - Read RegisterForm.tsx
+- 2024-01-15T10:30:05: apply_patch - Added email validation
+
+# Git Status
+Branch: feature/form-validation
+Clean: False
+```
+
+### Model Configuration
+
+Edit `ephraim/config.py` to change the default model:
+
+```python
+@dataclass
+class ModelConfig:
+    provider: str = "ollama"
+    model_name: str = "llama3.1:8b"  # Change this
+    endpoint: str = "http://localhost:11434"
+    temperature: float = 0.1
+    max_tokens: int = 4096
+```
+
+## Available Tools
+
+Ephraim has access to these tools during execution:
+
+| Tool | Description | Phase |
+|------|-------------|-------|
+| `read_file` | Read file contents with line numbers | Planning, Executing |
+| `list_directory` | List directory contents | Planning, Executing |
+| `apply_patch` | Make surgical edits to files | Executing (requires approval) |
+| `run_command` | Execute shell commands | Executing (requires approval) |
+| `git_status` | Get repository status | All phases |
+| `git_diff` | View staged/unstaged changes | All phases |
+| `git_add` | Stage files for commit | Executing |
+| `git_commit` | Create commits | Executing (requires approval) |
+| `check_ci_status` | Check GitHub Actions status | CI Check |
+| `get_ci_logs` | Fetch CI failure logs | CI Check |
+
+## Workflow Phases
+
+```
+BOOT → PLANNING → EXECUTING → VALIDATING → COMMITTING → CI_CHECK → COMPLETED
+                      ↑                                       │
+                      └───────────── (on CI failure) ─────────┘
+```
+
+1. **BOOT** - Initialize environment, verify Git/Ollama
+2. **PLANNING** - Analyze task, propose execution plan
+3. **EXECUTING** - Run approved plan steps
+4. **VALIDATING** - Run tests, verify changes work
+5. **COMMITTING** - Stage and commit changes
+6. **CI_CHECK** - Monitor CI pipeline
+7. **COMPLETED** - Task finished successfully
+
+## Architecture
+
+Ephraim is NOT a chatbot. It is:
+
+> A deterministic engineering workflow engine driven by an LLM.
+
+The LLM reasons. The system controls execution.
+
+```
+User Input
+    ↓
+Terminal Interface
+    ↓
+State Manager (phase enforcement, approval gating)
+    ↓
+LLM Brief Builder (curated context for LLM)
+    ↓
+LLM (Ollama - local inference)
+    ↓
+Structured JSON Response
+    ↓
+Tool Executor (sandboxed tool calls)
+    ↓
+State Update + Context.md
+    ↓
+Loop until complete
 ```
 
 ## Project Structure
@@ -96,70 +286,124 @@ ephraim/
 │   ├── agent_loop.py       # Main execution loop
 │   ├── llm_interface.py    # Ollama integration
 │   ├── config.py           # Configuration loading
-│   ├── logging_setup.py    # Logging system
+│   ├── logging_setup.py    # Rich terminal output
 │   └── tools/
-│       ├── __init__.py
+│       ├── __init__.py     # Tool registry
 │       ├── base.py         # Base tool class
-│       ├── read_file.py
+│       ├── read_file.py    # File reading
 │       ├── list_directory.py
-│       ├── apply_patch.py  # Patch engine
-│       ├── run_command.py  # Live streaming
-│       ├── ask_user.py
-│       ├── final_answer.py
-│       ├── git_tools.py    # Git helpers
+│       ├── apply_patch.py  # Patch engine (safety checks)
+│       ├── run_command.py  # Command execution (streaming)
+│       ├── ask_user.py     # User interaction
+│       ├── final_answer.py # Task completion
+│       ├── git_tools.py    # Git operations
 │       └── ci_tools.py     # GitHub CLI integration
+└── tests/                  # Test suite
 ```
 
-## Architecture
+## CLI Commands
 
-Ephraim is NOT a chatbot. It is:
+```bash
+# Launch interactive mode
+Ephraim
 
-> A deterministic engineering workflow engine driven by an LLM.
+# Show current status
+Ephraim status
 
-The LLM reasons. The system controls execution.
+# Show version
+Ephraim --version
 
-```
-User
-  ↓
-Terminal Interface
-  ↓
-State Manager
-  ↓
-LLM Brief Builder
-  ↓
-LLM (Ollama: qwen2.5-coder:14b)
-  ↓
-Structured JSON Action
-  ↓
-Tool Executor
-  ↓
-State Update
-  ↓
-Loop
+# Reset Context.md
+Ephraim reset
 ```
 
-## Key Concepts
+## Troubleshooting
 
-### Ephraim.md (Project Constitution)
-- Architecture constraints
-- Coding standards
-- Protected areas
-- Validation expectations
-- Git rules
+### "Ollama not connected" error
 
-### Context.md (Working Memory)
-- Current task progress
-- Recent decisions
-- CI status
-- Next steps
+```bash
+# Make sure Ollama is running
+ollama serve
 
-## Requirements
+# Verify the model is pulled
+ollama list
 
-- Python 3.10+
-- Ollama (local LLM server)
-- Git
-- GitHub CLI (`gh`) for CI integration
+# Test connection
+curl http://localhost:11434/api/tags
+```
+
+### "Model not found" warning
+
+```bash
+# Pull the required model
+ollama pull llama3.1:8b
+```
+
+### Ephraim keeps re-planning instead of executing
+
+This was fixed in v0.1.0. Make sure you have the latest version:
+
+```bash
+git pull
+pip install -e .
+```
+
+### GitHub CLI not authenticated
+
+```bash
+gh auth login
+gh auth status
+```
+
+## Development
+
+### Running Tests
+
+```bash
+# Install dev dependencies
+pip install -e ".[dev]"
+
+# Run all tests
+pytest tests/ -v
+
+# Run with coverage
+pytest tests/ --cov=ephraim --cov-report=html
+```
+
+### Code Style
+
+The project uses standard Python conventions:
+- Type hints throughout
+- Docstrings for public functions
+- Dataclasses for structured data
+
+## Contributing
+
+Contributions are welcome! Please:
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Make your changes
+4. Run tests (`pytest tests/ -v`)
+5. Commit with conventional commits (`feat: add amazing feature`)
+6. Push to your branch (`git push origin feature/amazing-feature`)
+7. Open a Pull Request
+
+## Roadmap
+
+- [ ] Multiple LLM provider support (OpenAI, Anthropic)
+- [ ] Plugin system for custom tools
+- [ ] Web UI option
+- [ ] Multi-file refactoring support
+- [ ] Integration with more CI systems (GitLab, Jenkins)
+- [ ] Code review mode
 
 ## License
 
-MIT
+MIT License - see [LICENSE](LICENSE) for details.
+
+## Acknowledgments
+
+- Built with [Ollama](https://ollama.ai) for local LLM inference
+- Terminal UI powered by [Rich](https://github.com/Textualize/rich)
+- Inspired by the need for safer, more controllable AI coding assistants
