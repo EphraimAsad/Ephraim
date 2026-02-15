@@ -171,6 +171,7 @@ class StateManager:
         brief: Dict[str, Any] = {
             "phase": self.state.phase.value,
             "goal": self.state.current_goal,
+            "repo_root": self.state.repo_root,
             "iteration": self.state.execution.iteration,
             "max_iterations": self.state.execution.max_iterations,
         }

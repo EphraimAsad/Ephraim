@@ -89,6 +89,20 @@ If risk is HIGH, you MUST include a "question" field to confirm.
 ## Current Context
 {context}
 
+## Executing an Approved Plan
+When "approved_plan" exists in the context:
+1. You are in EXECUTION mode - do NOT propose a new plan
+2. Look at "approved_plan.steps" and "approved_plan.current_step"
+3. Execute the current step using available tools (read_file, apply_patch, run_command, etc.)
+4. After each step, proceed to the next step in the plan
+5. Only ask questions if blocked or need clarification for the current step
+
+CRITICAL: When you have an approved_plan, your action MUST be a tool call - NEVER use "propose_plan".
+
+## Working Directory
+All file operations should be relative to "repo_root" provided in the context.
+When using run_command, git commands, or file operations, work within the repository.
+
 ## Important Rules
 1. ONLY output valid JSON - no other text
 2. Use exact tool names from the available tools list
@@ -96,6 +110,7 @@ If risk is HIGH, you MUST include a "question" field to confirm.
 4. When uncertain, ask clarifying questions
 5. Prefer reading files before modifying them
 6. Use apply_patch for code changes, never rewrite entire files
+7. When approved_plan exists, execute steps - do NOT propose a new plan
 """
 
 

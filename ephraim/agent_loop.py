@@ -218,6 +218,7 @@ class AgentLoop:
             self.state_manager.grant_approval()
             print_success("Plan approved. Executing...")
             print_phase("EXECUTING")
+            update_context_md(self.state)  # Persist plan to Context.md
             return True
         else:
             print_info("Plan rejected. Please provide feedback or a new task.")
@@ -243,8 +244,25 @@ class AgentLoop:
             print_warning(f"Unknown tool: {tool_name}")
             return True
 
-        # Execute the tool
-        print_info(f"Executing: {tool_name}")
+        # Show step progress if we have an approved plan
+        if self.state.current_plan.approved:
+            steps = self.state.current_plan.execution_steps
+            current_step = self.state_manager._get_current_step()
+            total = len(steps)
+            if current_step < total:
+                print_separator()
+                print_info(f">>> Step {current_step + 1}/{total}: {steps[current_step]}")
+
+        # Show tool and key parameters
+        print_info(f"    Tool: {tool_name}")
+        if tool_name == "run_command":
+            print_info(f"    Command: {params.get('command', '')}")
+        elif tool_name == "read_file":
+            print_info(f"    File: {params.get('path', '')}")
+        elif tool_name == "apply_patch":
+            print_info(f"    File: {params.get('path', '')}")
+        elif tool_name == "git_commit":
+            print_info(f"    Message: {params.get('message', '')}")
 
         try:
             result = tool(**params)
@@ -278,6 +296,9 @@ class AgentLoop:
         print_success("TASK COMPLETED")
         console.print(message)
         print_separator()
+
+        # Persist completion to Context.md
+        update_context_md(self.state)
 
         # Transition to completed
         self.state_manager.transition(Phase.COMPLETED)
@@ -339,7 +360,7 @@ def update_context_md(state: EphraimState) -> None:
     """
     Update Context.md with current state.
 
-    Called after significant actions.
+    Called after significant actions (plan approval, task completion).
     """
     content = f"""# Current Task
 {state.current_goal or "No active task."}
@@ -347,8 +368,20 @@ def update_context_md(state: EphraimState) -> None:
 # Phase
 {state.phase.value}
 
-# Recent Decisions
+# Active Plan
 """
+    # Add plan details if there's an approved plan
+    if state.current_plan.approved and state.current_plan.goal_understanding:
+        content += f"Goal: {state.current_plan.goal_understanding}\n"
+        content += "Steps:\n"
+        for i, step in enumerate(state.current_plan.execution_steps, 1):
+            content += f"  {i}. {step}\n"
+    elif state.phase == Phase.COMPLETED:
+        content += "Completed.\n"
+    else:
+        content += "No approved plan.\n"
+
+    content += "\n# Recent Decisions\n"
 
     recent = state.get_recent_actions(5)
     if recent:
