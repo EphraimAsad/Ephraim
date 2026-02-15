@@ -51,8 +51,21 @@ class AgentLoop:
         self.state = state
         self.config = config
         self.state_manager = create_state_manager(state, config)
-        self.llm = create_llm_interface(config.model)
+
+        # Create both LLM interfaces (planning and execution)
+        self.planning_llm = create_llm_interface(config.model)
+
+        # Use execution_model if configured, otherwise use default
+        from .config import get_default_execution_model
+        exec_model = config.execution_model or get_default_execution_model()
+        self.execution_llm = create_llm_interface(exec_model)
+        self._execution_model_name = exec_model.model_name
+
+        # Start with planning model
+        self.llm = self.planning_llm
+
         self.logger = get_logger()
+        self._plan_rejection_count = 0  # Track repeated plan proposals
 
     def run(self) -> None:
         """
@@ -62,9 +75,18 @@ class AgentLoop:
         """
         print_header("EPHRAIM AGENT")
 
-        # Verify LLM connection
+        # Verify planning model
         if not verify_ollama_connection(self.config.model):
-            print_warning("Running in limited mode without LLM.")
+            print_warning("Planning model not available. Running in limited mode.")
+
+        # Verify execution model
+        from .config import get_default_execution_model
+        exec_model = self.config.execution_model or get_default_execution_model()
+        if not verify_ollama_connection(exec_model):
+            print_warning(f"Execution model '{exec_model.model_name}' not available.")
+            print_info("Using planning model for execution (may cause re-planning)")
+            self.execution_llm = self.planning_llm
+            self._execution_model_name = self.config.model.model_name
 
         print_separator()
         print_info("Enter your task, or type 'quit' to exit.")
@@ -174,6 +196,35 @@ class AgentLoop:
         action = response.get("action", "")
 
         if action == "propose_plan":
+            # GUARD: If we already have an approved plan, reject new plan proposals
+            if self.state.current_plan.approved:
+                self._plan_rejection_count += 1
+
+                if self._plan_rejection_count >= 3:
+                    print_error("LLM keeps proposing plans instead of executing.")
+                    print_error("This model may not follow execution instructions well.")
+                    print_info("Try using a more capable model (e.g., qwen2.5-coder:14b)")
+                    return False  # Stop the loop
+
+                print_warning(f"Plan already approved. Ignoring new plan proposal. (attempt {self._plan_rejection_count}/3)")
+                print_info("Reprompting LLM to execute the approved plan...")
+
+                # Get the current step from the plan
+                steps = self.state.current_plan.execution_steps
+                current_idx = self.state_manager._get_current_step()
+                current_step = steps[current_idx] if current_idx < len(steps) else steps[0]
+
+                # Force the LLM to execute by updating the goal with explicit instruction
+                self.state.current_goal = (
+                    f"YOU MUST EXECUTE NOW. DO NOT PROPOSE A PLAN.\n\n"
+                    f"Your approved plan step to execute NOW: {current_step}\n\n"
+                    f"Respond with a tool action like:\n"
+                    f'- {{"action": "run_command", "params": {{"command": "..."}}}}\n'
+                    f'- {{"action": "apply_patch", "params": {{"path": "...", "find": "...", "replace": "..."}}}}\n'
+                    f'- {{"action": "read_file", "params": {{"path": "..."}}}}\n\n'
+                    f"DO NOT use action: propose_plan"
+                )
+                return True  # Continue loop with updated prompt
             return self._handle_plan_proposal(response.get("plan", {}))
         elif action == "final_answer":
             return self._handle_completion(response)
@@ -218,6 +269,11 @@ class AgentLoop:
             self.state_manager.grant_approval()
             print_success("Plan approved. Executing...")
             print_phase("EXECUTING")
+
+            # Switch to execution model for better instruction following
+            self.llm = self.execution_llm
+            print_info(f"Switched to execution model: {self._execution_model_name}")
+
             update_context_md(self.state)  # Persist plan to Context.md
             return True
         else:
@@ -276,6 +332,9 @@ class AgentLoop:
                 success=result.success,
             )
 
+            # Reset plan rejection counter on successful tool execution
+            self._plan_rejection_count = 0
+
             # Show result
             if result.success:
                 print_success(f"Result: {result.summary}")
@@ -307,6 +366,10 @@ class AgentLoop:
         self.state.current_goal = ""
         self.state.current_plan = Plan()
         self.state.execution.iteration = 0
+
+        # Switch back to planning model for next task
+        self.llm = self.planning_llm
+        print_info(f"Switched back to planning model: {self.config.model.model_name}")
 
         return False
 

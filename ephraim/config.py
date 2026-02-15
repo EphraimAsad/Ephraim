@@ -21,6 +21,19 @@ class ModelConfig:
     timeout: int = 120  # seconds
 
 
+def get_default_execution_model() -> ModelConfig:
+    """
+    Get the default execution model configuration.
+
+    The execution model is used after plan approval.
+    It should be a more capable model that follows instructions well.
+    """
+    return ModelConfig(
+        model_name="qwen2.5-coder:14b",
+        temperature=0.2,  # Slightly higher for creative problem-solving
+    )
+
+
 @dataclass
 class GitConfig:
     """Git integration configuration."""
@@ -60,7 +73,8 @@ class EphraimConfig:
 
     Can be loaded from Ephraim.md or use defaults.
     """
-    model: ModelConfig = field(default_factory=ModelConfig)
+    model: ModelConfig = field(default_factory=ModelConfig)  # Planning model
+    execution_model: Optional[ModelConfig] = None  # Execution model (uses default if None)
     git: GitConfig = field(default_factory=GitConfig)
     ci: CIConfig = field(default_factory=CIConfig)
     safety: SafetyConfig = field(default_factory=SafetyConfig)
