@@ -103,14 +103,84 @@ CRITICAL: When you have an approved_plan, your action MUST be a tool call - NEVE
 All file operations should be relative to "repo_root" provided in the context.
 When using run_command, git commands, or file operations, work within the repository.
 
+## Tool Usage Guidelines
+
+### File Creation & Writing
+- Use `write_file` to CREATE new files (path, content)
+- Use `apply_patch` to EDIT existing files (find/replace)
+- Always use write_file for new files - apply_patch only works on existing files
+
+### File Management
+- `delete_file` - Remove files (creates backup by default)
+- `move_file` - Move or rename files
+- `copy_file` - Copy files to new location
+
+### Directory Management
+- `create_directory` - Create new folders (creates parents automatically)
+- `delete_directory` - Remove folders (recursive=true for non-empty)
+
+### Search & Discovery
+- `glob_search` - Find files by pattern (e.g., "**/*.py")
+- `grep_search` - Search file contents for text/regex
+- `read_file` - Read file contents with line numbers
+- `list_directory` - List directory contents
+
+### Execution
+- `run_command` - Execute shell commands with streaming output
+
+### Git Operations
+- `git_status`, `git_diff`, `git_add`, `git_commit`
+
+### Multimodal (if vision model available)
+- `read_image` - Analyze images using AI vision
+- `read_pdf` - Read PDF files (text extraction or vision analysis)
+
+### MCP (Model Context Protocol)
+- `mcp_connect` - Connect to an MCP server
+- `mcp_list_tools` - List tools from connected servers
+- `mcp_call` - Call a tool on an MCP server
+- `mcp_status` - Get MCP connection status
+
+### Web Tools
+- `web_search` - Search the web using DuckDuckGo
+- `web_fetch` - Fetch and extract content from a URL
+
+### CI Tools
+- `check_ci_status` - Check CI/CD pipeline status
+- `get_ci_logs` - Get logs from CI runs
+- `check_ci_result` - Check result of a specific CI run
+
+### Task Management
+- `task_create` - Create a task for tracking
+- `task_update` - Update task status
+- `task_list` - List all tasks
+
+### Notebook Tools
+- `notebook_read` - Read Jupyter notebook cells
+- `notebook_edit` - Edit Jupyter notebook cells
+
+### Completion
+- `final_answer` - Mark the task as complete with a summary
+
+## Workflow Phases
+1. PLANNING - Propose a plan for approval (use read-only tools)
+2. EXECUTING - Execute the approved plan steps
+3. VALIDATING - Run tests/checks to verify changes work
+4. CI_CHECK - Verify CI/CD pipeline passes (if enabled)
+5. COMPLETED - Task is done
+
+In VALIDATING phase, run the validation_plan from the approved plan.
+In CI_CHECK phase, use CI tools to verify the pipeline.
+
 ## Important Rules
 1. ONLY output valid JSON - no other text
 2. Use exact tool names from the available tools list
-3. Always explain your reasoning
+3. Always explain your reasoning thoroughly - show your thinking
 4. When uncertain, ask clarifying questions
 5. Prefer reading files before modifying them
-6. Use apply_patch for code changes, never rewrite entire files
+6. Use write_file for NEW files, apply_patch for EDITING existing files
 7. When approved_plan exists, execute steps - do NOT propose a new plan
+8. Use glob_search and grep_search to explore the codebase
 """
 
 
@@ -191,6 +261,7 @@ class LLMInterface:
                         "temperature": self.config.temperature,
                         "num_predict": self.config.max_tokens,
                     },
+                    format="json",
                 )
 
                 raw_response = response["message"]["content"]
@@ -264,6 +335,7 @@ class LLMInterface:
                     "num_predict": self.config.max_tokens,
                 },
                 stream=True,
+                format="json",
             )
 
             for chunk in stream:

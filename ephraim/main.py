@@ -18,9 +18,12 @@ from .logging_setup import (
     print_error,
     print_success,
     print_separator,
+    print_warning,
     get_user_input,
     console,
 )
+
+VERSION = "0.3.0"
 
 
 def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
@@ -55,7 +58,7 @@ Examples:
     parser.add_argument(
         '--version',
         action='version',
-        version='%(prog)s 0.1.0',
+        version=f'%(prog)s {VERSION}',
     )
 
     return parser.parse_args(args)
@@ -120,10 +123,48 @@ def show_config(config) -> None:
             print_info(f"  - {constraint}")
 
 
+def show_feature_status() -> None:
+    """Display status of optional features."""
+    # Check multimodal status
+    try:
+        from .tools.multimodal_tools import get_multimodal_status
+        status = get_multimodal_status()
+
+        features = []
+
+        if status["vision_available"]:
+            features.append(f"Vision ({status['vision_model']})")
+        if status["pdf_text_available"]:
+            features.append("PDF Text")
+        if status["pdf_image_available"]:
+            features.append("PDF Vision")
+
+        if features:
+            print_info(f"Features: {', '.join(features)}")
+        else:
+            print_info("Features: Base (install llava for vision, PyMuPDF for PDF)")
+
+    except Exception:
+        pass
+
+    # Check MCP status
+    try:
+        from .mcp import get_mcp_client
+        client = get_mcp_client()
+        servers = list(client.servers.keys())
+        if servers:
+            print_info(f"MCP Servers: {', '.join(servers)}")
+    except Exception:
+        pass
+
+
 def run_interactive(state, config) -> None:
     """
     Run Ephraim in interactive mode using the agent loop.
     """
+    # Show feature status
+    show_feature_status()
+
     run_agent(state, config)
 
 
@@ -139,7 +180,7 @@ def main(args: Optional[List[str]] = None) -> int:
 
         # Handle version (already handled by argparse)
         if parsed.command == 'version':
-            console.print("Ephraim 0.1.0")
+            console.print(f"Ephraim {VERSION}")
             return 0
 
         # Boot the system

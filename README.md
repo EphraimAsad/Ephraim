@@ -1,34 +1,36 @@
 # Ephraim
 
-**A Senior-Engineer Terminal Coding Agent**
+**A Senior-Engineer Terminal Coding Agent - Local Claude Code Alternative**
 
-[![Version](https://img.shields.io/badge/version-0.1.1-blue.svg)](https://github.com/EphraimAsad/ephraim)
+[![Version](https://img.shields.io/badge/version-0.3.0-blue.svg)](https://github.com/EphraimAsad/ephraim)
 [![Python](https://img.shields.io/badge/python-3.10+-green.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Ollama](https://img.shields.io/badge/powered%20by-Ollama-orange.svg)](https://ollama.ai)
 
-Ephraim is a terminal-first, local, Git-aware, CI-aware agentic coding system that behaves like a **senior software engineer**. It plans before it acts, asks for approval before making changes, and integrates with your existing development workflow.
+Ephraim is a **free, local, privacy-first** terminal coding agent that provides Claude Code-like capabilities using Ollama. No API keys, no cloud, no costs - just powerful AI-assisted coding running entirely on your machine.
 
-## Features
+## Key Features
 
-- **Plan-First Approach** - Proposes a full execution plan before making any changes
-- **Human Approval Required** - No code changes without your explicit approval
-- **Dual-Model Architecture** - Uses a lightweight model for planning, switches to a capable model for execution
-- **Git-Aware** - Understands your repository state, branches, and staged changes
-- **CI-Aware** - Monitors GitHub Actions and responds to CI failures
-- **Local & Private** - Runs entirely on your machine using Ollama (no data sent to cloud)
-- **Patch-Based Edits** - Makes surgical, targeted changes instead of rewriting files
-- **Live Output** - Streams command output in real-time
-- **Session Memory** - Tracks progress in Context.md for continuity across sessions
+| Feature | Description |
+|---------|-------------|
+| **100% Local** | Runs on Ollama - no data leaves your machine |
+| **Free Forever** | No API costs, no subscriptions |
+| **Plan-First** | Proposes plans before making changes |
+| **Human Approval** | No code changes without your consent |
+| **Streaming Output** | Real-time token display as the LLM thinks |
+| **36 Built-in Tools** | File ops, search, git, web, MCP, and more |
+| **MCP Integration** | Connect to external tool servers |
+| **Multimodal** | Analyze images and PDFs with vision models |
+| **Git & CI Aware** | Understands your repo and CI pipeline |
+| **Extensible** | Hooks, skills, commands, sub-agents |
 
-## Design Philosophy
+## What's New in v0.3.0
 
-| Principle | Implementation |
-|-----------|----------------|
-| **Safety > Speed** | Human approval required before code changes |
-| **Architecture Preservation > Rewrites** | Minimal, targeted patch-based edits |
-| **Incremental Change > Large Refactors** | One step at a time with verification |
-| **Real System Feedback > Speculation** | Uses actual test/CI results to guide decisions |
-| **Human Oversight Required** | No autonomous execution of dangerous operations |
+- **Streaming Token Display** - Watch the LLM think in real-time
+- **MCP Integration** - Connect to Model Context Protocol servers for extensible tools
+- **Multimodal Support** - Read images and PDFs using Ollama vision models (llava)
+- **Full Workflow Phases** - VALIDATING and CI_CHECK phases now functional
+- **36 Tools** - Comprehensive tool suite matching Claude Code capabilities
 
 ## Requirements
 
@@ -41,41 +43,41 @@ Ephraim is a terminal-first, local, Git-aware, CI-aware agentic coding system th
 
 ### 1. Install Ollama
 
-Download and install Ollama from [ollama.ai](https://ollama.ai).
+Download from [ollama.ai](https://ollama.ai), then pull models:
 
 ```bash
-# Pull both models (planning + execution)
-ollama pull llama3.1:8b         # Fast planning model
-ollama pull qwen2.5-coder:14b   # Capable execution model
+# Required: Main model
+ollama pull llama3.1:8b
+
+# Optional: Vision model for images/PDFs
+ollama pull llava
 ```
 
 ### 2. Install Ephraim
 
 ```bash
 # Clone the repository
-git clone https://github.com/EphraimAsad/ephraim.git
+git clone https://github.com/yourusername/ephraim.git
 cd ephraim
 
-# Install in development mode
+# Install
 pip install -e .
 
-# Or install with dev dependencies for testing
-pip install -e ".[dev]"
+# Or with multimodal support (images/PDFs)
+pip install -e ".[multimodal]"
+
+# Or with all extras
+pip install -e ".[all]"
 ```
 
-### 3. (Optional) Install GitHub CLI
-
-For CI integration features:
+### 3. (Optional) GitHub CLI for CI Integration
 
 ```bash
-# Windows (winget)
+# Windows
 winget install GitHub.cli
 
 # macOS
 brew install gh
-
-# Linux
-# See https://github.com/cli/cli/blob/trunk/docs/install_linux.md
 
 # Authenticate
 gh auth login
@@ -84,310 +86,329 @@ gh auth login
 ## Quick Start
 
 ```bash
-# Navigate to your project
 cd your-project
-
-# Launch Ephraim
 Ephraim
 ```
-
-Ephraim will:
-1. Detect your Git repository root
-2. Create `Ephraim.md` (project configuration) if it doesn't exist
-3. Create `Context.md` (session memory) if it doesn't exist
-4. Connect to Ollama and verify both models are available
-5. Wait for your task input
 
 ### Example Session
 
 ```
-╭──────────────────────────────────────────────────────────╮
-│  EPHRAIM - Senior Engineer Terminal Agent               │
-╰──────────────────────────────────────────────────────────╯
++----------------------------------------------------------+
+|  EPHRAIM - Senior Engineer Terminal Agent                |
++----------------------------------------------------------+
 >>> Phase: BOOT
 Repository root: C:\Projects\my-app
 Ollama connected. Model: llama3.1:8b
-Ollama connected. Model: qwen2.5-coder:14b
-────────────────────────────────────────────────────────────
-Enter your task, or type 'quit' to exit.
-────────────────────────────────────────────────────────────
-Ephraim> Add input validation to the user registration form
+Features: Vision (llava), PDF Text
+------------------------------------------------------------
+Ephraim> Add input validation to the registration form
 
 >>> Phase: PLANNING
-Confidence: 85% (HIGH)
-Risk Level: MEDIUM
+Thinking... {"reasoning": "I need to first read the current...
 
-╭─────────────────── Execution Plan ───────────────────────╮
-│ Goal: Add input validation to user registration form    │
-│                                                          │
-│ Steps:                                                   │
-│   1. Read the current registration form component        │
-│   2. Identify input fields that need validation          │
-│   3. Add email format validation                         │
-│   4. Add password strength requirements                  │
-│   5. Add error message display                           │
-│   6. Test the validation logic                           │
-╰──────────────────────────────────────────────────────────╯
++------------------- Execution Plan -----------------------+
+| Goal: Add input validation to user registration form     |
+|                                                          |
+| Steps:                                                   |
+|   1. Read the current registration form component        |
+|   2. Add email format validation                         |
+|   3. Add password strength requirements                  |
+|   4. Test the validation                                 |
++----------------------------------------------------------+
 
 Approve plan? (y/n): y
 Plan approved. Executing...
-Switched to execution model: qwen2.5-coder:14b
 
->>> Step 1/6: Read the current registration form component
-    Tool: read_file
-    File: src/components/RegisterForm.tsx
-    Success: Read 45 lines
+>>> Step 1/4: Read the current registration form component
+    Action: read_file
+    path: src/components/RegisterForm.tsx
+Result: Read 45 lines
 
->>> Step 2/6: Identify input fields...
+>>> Step 2/4: Add email format validation
+    Action: apply_patch
+    path: src/components/RegisterForm.tsx
+Result: Patched at line 12 (+5 lines)
+...
 ```
 
-## Dual-Model Architecture
+## Available Tools (36 Total)
 
-Ephraim uses two models for optimal performance:
+### File Operations
+| Tool | Description |
+|------|-------------|
+| `read_file` | Read file contents with line numbers |
+| `write_file` | Create new files |
+| `apply_patch` | Make surgical edits (find/replace) |
+| `delete_file` | Remove files (with backup) |
+| `move_file` | Move or rename files |
+| `copy_file` | Copy files |
 
-| Role | Default Model | Purpose |
-|------|---------------|---------|
-| **Planning** | llama3.1:8b | Fast reasoning, plan generation, clarifying questions |
-| **Execution** | qwen2.5-coder:14b | Reliable tool execution, follows instructions precisely |
+### Directory Operations
+| Tool | Description |
+|------|-------------|
+| `list_directory` | List directory contents |
+| `create_directory` | Create folders |
+| `delete_directory` | Remove folders |
 
-**Why two models?**
-- Smaller models are fast and good at high-level reasoning
-- Larger models follow execution instructions more reliably
-- Automatic switching eliminates re-planning loops
+### Search
+| Tool | Description |
+|------|-------------|
+| `glob_search` | Find files by pattern (`**/*.py`) |
+| `grep_search` | Search file contents (regex) |
 
-**Model switching happens automatically:**
-1. Planning phase uses the lightweight model
-2. After plan approval, switches to the execution model
-3. After task completion, switches back to planning model
+### Execution
+| Tool | Description |
+|------|-------------|
+| `run_command` | Execute shell commands (streaming) |
 
-### Customizing Models
+### Git
+| Tool | Description |
+|------|-------------|
+| `git_status` | Repository status |
+| `git_diff` | View changes |
+| `git_add` | Stage files |
+| `git_commit` | Create commits |
 
-Edit `ephraim/config.py` to change defaults:
+### CI/CD
+| Tool | Description |
+|------|-------------|
+| `check_ci_status` | Check pipeline status |
+| `get_ci_logs` | Fetch CI logs |
+| `check_ci_result` | Check specific run |
 
-```python
-@dataclass
-class ModelConfig:
-    provider: str = "ollama"
-    model_name: str = "llama3.1:8b"  # Planning model
-    endpoint: str = "http://localhost:11434"
-    temperature: float = 0.1
-    max_tokens: int = 4096
+### Web (Free, No API Keys)
+| Tool | Description |
+|------|-------------|
+| `web_search` | Search via DuckDuckGo |
+| `web_fetch` | Fetch URL content |
 
-def get_default_execution_model() -> ModelConfig:
-    return ModelConfig(
-        model_name="qwen2.5-coder:14b",  # Execution model
-        temperature=0.2,
-    )
+### MCP (Model Context Protocol)
+| Tool | Description |
+|------|-------------|
+| `mcp_connect` | Connect to MCP server |
+| `mcp_disconnect` | Disconnect from server |
+| `mcp_list_tools` | List available tools |
+| `mcp_call` | Call an MCP tool |
+| `mcp_status` | Connection status |
+
+### Multimodal
+| Tool | Description |
+|------|-------------|
+| `read_image` | Analyze images (requires llava) |
+| `read_pdf` | Read PDFs (text or vision) |
+
+### Notebooks
+| Tool | Description |
+|------|-------------|
+| `notebook_read` | Read Jupyter notebooks |
+| `notebook_edit` | Edit notebook cells |
+
+### Task Management
+| Tool | Description |
+|------|-------------|
+| `task_create` | Create a task |
+| `task_update` | Update task status |
+| `task_list` | List all tasks |
+| `task_get` | Get task details |
+
+### User Interaction
+| Tool | Description |
+|------|-------------|
+| `ask_user` | Ask clarifying questions |
+| `final_answer` | Complete the task |
+
+## Built-in Commands
+
+Type these directly at the prompt:
+
+| Command | Description |
+|---------|-------------|
+| `/help` | Show help |
+| `/status` | Current state |
+| `/tasks` | List tasks |
+| `/clear` | Clear screen |
+| `/reset` | Reset context |
+| `/quit` | Exit |
+| `/compact` | Compact history |
+| `/background` | List background tasks |
+
+## Skills
+
+Skills expand into full prompts for common tasks:
+
+| Skill | Description |
+|-------|-------------|
+| `/commit` | Create a git commit |
+| `/test` | Run tests |
+| `/review` | Code review |
+| `/fix` | Fix an issue |
+| `/explain` | Explain code |
+| `/search` | Search codebase |
+| `/init` | Initialize project |
+| `/pr` | Create pull request |
+| `/debug` | Debug an issue |
+
+## Workflow Phases
+
 ```
+BOOT -> PLANNING -> AWAITING_APPROVAL -> EXECUTING -> VALIDATING -> CI_CHECK -> COMPLETED
+                           |                                              |
+                           +<------------ (on failure) -------------------+
+```
+
+1. **BOOT** - Initialize, verify Ollama connection
+2. **PLANNING** - Analyze task, propose execution plan
+3. **AWAITING_APPROVAL** - Wait for user to approve plan
+4. **EXECUTING** - Run approved plan steps
+5. **VALIDATING** - Run tests, verify changes work
+6. **CI_CHECK** - Monitor CI pipeline (if enabled)
+7. **COMPLETED** - Task finished
 
 ## Configuration
 
 ### Ephraim.md
 
-Created automatically in your project root. Customize to set project-specific rules:
+Project-specific rules (created automatically):
 
 ```markdown
-# Ephraim.md - Project Configuration
+# Architecture Constraints
+- Use React functional components
+- State management via Redux
 
-## Architecture Constraints
-- Use React functional components with hooks
-- State management via Redux Toolkit
-- API calls through RTK Query
-
-## Coding Standards
+# Coding Standards
 - TypeScript strict mode
-- ESLint + Prettier formatting
-- Jest for unit tests
+- ESLint + Prettier
 
-## Protected Areas
-- Do not modify: config/, .env files
-- Require extra approval: auth/, payment/
+# Protected Areas
+- Do not modify: .env, config/
 
-## Validation Expectations
+# Validation Expectations
 - All PRs must pass CI
-- Test coverage > 80%
 
-## Git Rules
-- Conventional commits (feat:, fix:, etc.)
-- No direct commits to main
+# Git Rules
+- Conventional commits
+
+# MCP Servers
+- sqlite: uvx mcp-server-sqlite --db-path ./data.db
+
+# Hooks
+- pre_tool: npm run lint (for apply_patch, write_file)
+- post_commit: ./scripts/notify.sh
 ```
 
 ### Context.md
 
-Automatically maintained by Ephraim to track session progress:
+Session state (auto-maintained):
 
 ```markdown
 # Current Task
-Add input validation to user registration form
+Add input validation to registration form
 
 # Phase
 executing
 
 # Active Plan
-Goal: Add input validation to user registration form
+Goal: Add input validation
 Steps:
-  1. Read the current registration form component
-  2. Identify input fields that need validation
-  3. Add email format validation
+  1. Read form component
+  2. Add email validation
   ...
-
-# Recent Decisions
-- 2024-01-15T10:30:00: read_file - Read RegisterForm.tsx
-- 2024-01-15T10:30:05: apply_patch - Added email validation
-
-# Git Status
-Branch: feature/form-validation
-Clean: False
-```
-
-## Available Tools
-
-Ephraim has access to these tools during execution:
-
-| Tool | Description | Phase |
-|------|-------------|-------|
-| `read_file` | Read file contents with line numbers | Planning, Executing |
-| `list_directory` | List directory contents | Planning, Executing |
-| `apply_patch` | Make surgical edits to files | Executing (requires approval) |
-| `run_command` | Execute shell commands | Executing (requires approval) |
-| `git_status` | Get repository status | All phases |
-| `git_diff` | View staged/unstaged changes | All phases |
-| `git_add` | Stage files for commit | Executing |
-| `git_commit` | Create commits | Executing (requires approval) |
-| `check_ci_status` | Check GitHub Actions status | CI Check |
-| `get_ci_logs` | Fetch CI failure logs | CI Check |
-
-## Workflow Phases
-
-```
-BOOT → PLANNING → EXECUTING → VALIDATING → COMMITTING → CI_CHECK → COMPLETED
-                      ↑                                       │
-                      └───────────── (on CI failure) ─────────┘
-```
-
-1. **BOOT** - Initialize environment, verify Git/Ollama, check both models
-2. **PLANNING** - Analyze task, propose execution plan (using planning model)
-3. **EXECUTING** - Run approved plan steps (using execution model)
-4. **VALIDATING** - Run tests, verify changes work
-5. **COMMITTING** - Stage and commit changes
-6. **CI_CHECK** - Monitor CI pipeline
-7. **COMPLETED** - Task finished successfully
-
-## Architecture
-
-Ephraim is NOT a chatbot. It is:
-
-> A deterministic engineering workflow engine driven by LLMs.
-
-The LLMs reason. The system controls execution.
-
-```
-User Input
-    ↓
-Terminal Interface
-    ↓
-State Manager (phase enforcement, approval gating)
-    ↓
-LLM Brief Builder (curated context for LLM)
-    ↓
-Planning LLM (llama3.1:8b) ──────┐
-    ↓                            │
-Plan Approval                    │
-    ↓                            │
-Execution LLM (qwen2.5-coder:14b)│
-    ↓                            │
-Tool Executor (sandboxed)        │
-    ↓                            │
-State Update + Context.md        │
-    ↓                            │
-Loop until complete ─────────────┘
 ```
 
 ## Project Structure
 
 ```
 ephraim/
-├── pyproject.toml          # Package configuration
-├── README.md               # This file
-├── LICENSE                 # MIT License
+├── pyproject.toml
+├── README.md
 ├── ephraim/
-│   ├── __init__.py         # Package init
-│   ├── main.py             # CLI entry point
-│   ├── boot.py             # Boot sequence
-│   ├── state.py            # State object model
-│   ├── state_manager.py    # State transitions, LLM brief builder
-│   ├── agent_loop.py       # Main execution loop, model switching
-│   ├── llm_interface.py    # Ollama integration
-│   ├── config.py           # Configuration, model defaults
-│   ├── logging_setup.py    # Rich terminal output
+│   ├── __init__.py
+│   ├── main.py              # CLI entry point
+│   ├── boot.py              # Boot sequence
+│   ├── state.py             # State model
+│   ├── state_manager.py     # Phase transitions
+│   ├── agent_loop.py        # Main loop + streaming
+│   ├── llm_interface.py     # Ollama integration
+│   ├── config.py            # Configuration
+│   ├── logging_setup.py     # Rich terminal UI
+│   ├── commands.py          # Built-in commands
+│   ├── skills.py            # Skill definitions
+│   ├── subagents.py         # Parallel task agents
+│   ├── hooks.py             # Pre/post hooks
+│   ├── tasks.py             # Task management
+│   ├── background.py        # Background tasks
+│   ├── history.py           # Command history
+│   ├── keybindings.py       # Keyboard shortcuts
+│   ├── mcp/                 # MCP integration
+│   │   ├── __init__.py
+│   │   ├── client.py
+│   │   └── protocol.py
 │   └── tools/
-│       ├── __init__.py     # Tool registry
-│       ├── base.py         # Base tool class
-│       ├── read_file.py    # File reading
-│       ├── list_directory.py
-│       ├── apply_patch.py  # Patch engine (safety checks)
-│       ├── run_command.py  # Command execution (streaming)
-│       ├── ask_user.py     # User interaction
-│       ├── final_answer.py # Task completion
-│       ├── git_tools.py    # Git operations
-│       └── ci_tools.py     # GitHub CLI integration
-└── tests/                  # Test suite (285 tests)
+│       ├── __init__.py      # Tool registry (36 tools)
+│       ├── base.py          # Base tool class
+│       ├── read_file.py
+│       ├── write_file.py
+│       ├── apply_patch.py
+│       ├── run_command.py
+│       ├── file_operations.py
+│       ├── directory_tools.py
+│       ├── search_tools.py
+│       ├── git_tools.py
+│       ├── ci_tools.py
+│       ├── web_tools.py
+│       ├── mcp_tools.py
+│       ├── multimodal_tools.py
+│       ├── notebook_tools.py
+│       ├── task_tools.py
+│       ├── ask_user.py
+│       └── final_answer.py
 ```
 
-## CLI Commands
+## CLI Usage
 
 ```bash
-# Launch interactive mode
+# Interactive mode
 Ephraim
 
-# Show current status
+# Show status
 Ephraim status
 
-# Show version
-Ephraim --version
+# Show config
+Ephraim config
 
-# Reset Context.md
+# Reset context
 Ephraim reset
+
+# Version
+Ephraim --version
 ```
 
 ## Troubleshooting
 
-### "Ollama not connected" error
+### Ollama Not Connected
 
 ```bash
-# Make sure Ollama is running
+# Start Ollama
 ollama serve
 
-# Verify both models are pulled
+# Verify models
 ollama list
 
-# Test connection
-curl http://localhost:11434/api/tags
-```
-
-### "Model not found" warning
-
-```bash
-# Pull both required models
+# Pull required model
 ollama pull llama3.1:8b
-ollama pull qwen2.5-coder:14b
 ```
 
-### Execution model not available
+### Vision Not Available
 
-If the execution model (qwen2.5-coder:14b) is not available, Ephraim will fall back to using the planning model for execution. You'll see a warning:
-
-```
-Warning: Execution model 'qwen2.5-coder:14b' not available.
-Using planning model for execution (may cause re-planning)
-```
-
-To fix, pull the execution model:
 ```bash
-ollama pull qwen2.5-coder:14b
+# Pull vision model
+ollama pull llava
+
+# Verify
+Ephraim  # Should show "Features: Vision (llava)"
 ```
 
-### GitHub CLI not authenticated
+### GitHub CLI Not Authenticated
 
 ```bash
 gh auth login
@@ -396,65 +417,62 @@ gh auth status
 
 ## Development
 
-### Running Tests
-
 ```bash
 # Install dev dependencies
 pip install -e ".[dev]"
 
-# Run all tests
+# Run tests
 pytest tests/ -v
 
-# Run with coverage
-pytest tests/ --cov=ephraim --cov-report=html
+# With coverage
+pytest tests/ --cov=ephraim
 ```
-
-**Current test status:** 285 tests passing
-
-### Code Style
-
-The project uses standard Python conventions:
-- Type hints throughout
-- Docstrings for public functions
-- Dataclasses for structured data
-
-## Contributing
-
-Contributions are welcome! Please:
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Make your changes
-4. Run tests (`pytest tests/ -v`)
-5. Commit with conventional commits (`feat: add amazing feature`)
-6. Push to your branch (`git push origin feature/amazing-feature`)
-7. Open a Pull Request
 
 ## Changelog
 
+### v0.3.0
+- Streaming token display (real-time LLM output)
+- MCP (Model Context Protocol) integration
+- Multimodal support (images/PDFs via llava)
+- Fixed VALIDATING/CI_CHECK workflow phases
+- Fixed step tracking for all execution tools
+- Fixed final_answer tool execution flow
+- 36 tools total
+
+### v0.2.0
+- File creation/management tools (write, delete, move, copy)
+- Directory tools (create, delete)
+- Search tools (glob, grep)
+- Web search/fetch via DuckDuckGo (free)
+- Task management system
+- Built-in commands (/help, /status, /tasks, etc.)
+- Skills system (/commit, /test, /review, etc.)
+- Sub-agent system for parallel tasks
+- Hooks system (pre/post tool automation)
+- Jupyter notebook support
+- Command history with prompt_toolkit
+- Enhanced keyboard shortcuts
+
 ### v0.1.1
-- Added dual-model architecture (planning + execution models)
-- Fixed infinite re-planning loop with smaller models
-- Added step-by-step execution progress display
-- Added Context.md persistence for plan tracking
-- Added repo_root to LLM context
-- Improved action visibility in terminal
+- Dual-model architecture (planning + execution)
+- Fixed infinite re-planning loop
+- Step-by-step execution progress
+- Context.md persistence
 
 ### v0.1.0
 - Initial release
-- Core agent loop with planning and execution phases
+- Core agent loop
 - Git and CI integration
-- Ollama LLM support
+- Ollama support
 - Tool system with safety checks
 
 ## Roadmap
 
-- [ ] Multiple LLM provider support (OpenAI, Anthropic)
-- [ ] Configurable model selection via Ephraim.md
-- [ ] Plugin system for custom tools
+- [x] ~~Plugin system~~ (Done via MCP)
+- [x] ~~Multi-file refactoring~~ (Inherently supported)
 - [ ] Web UI option
-- [ ] Multi-file refactoring support
-- [ ] Integration with more CI systems (GitLab, Jenkins)
+- [ ] More CI systems (GitLab, Jenkins)
+- [ ] Model selection via Ephraim.md
 - [ ] Code review mode
 
 ## License
@@ -463,6 +481,7 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 ## Acknowledgments
 
-- Built with [Ollama](https://ollama.ai) for local LLM inference
-- Terminal UI powered by [Rich](https://github.com/Textualize/rich)
-- Inspired by the need for safer, more controllable AI coding assistants
+- [Ollama](https://ollama.ai) - Local LLM inference
+- [Rich](https://github.com/Textualize/rich) - Terminal UI
+- [DuckDuckGo](https://duckduckgo.com) - Free web search
+- Inspired by Claude Code's capabilities, built for local use

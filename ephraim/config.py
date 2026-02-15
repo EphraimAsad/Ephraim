@@ -29,7 +29,7 @@ def get_default_execution_model() -> ModelConfig:
     It should be a more capable model that follows instructions well.
     """
     return ModelConfig(
-        model_name="qwen2.5-coder:14b",
+        model_name="llama3.1:8b",
         temperature=0.2,  # Slightly higher for creative problem-solving
     )
 

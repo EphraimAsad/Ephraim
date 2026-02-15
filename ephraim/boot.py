@@ -282,7 +282,29 @@ def boot() -> Tuple[EphraimState, EphraimConfig]:
         config.ci.enabled = False
         logger.warning("GitHub CLI not available")
 
-    # Step 9: Transition to planning phase
+    # Step 9: Load hooks from Ephraim.md
+    try:
+        from .hooks import get_hook_manager
+        with open(ephraim_md_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        hook_manager = get_hook_manager()
+        hook_count = hook_manager.load_from_config(content)
+        if hook_count > 0:
+            print_info(f"Loaded {hook_count} hooks")
+    except Exception:
+        pass
+
+    # Step 10: Load MCP server configs
+    try:
+        from .mcp import get_mcp_client
+        client = get_mcp_client()
+        mcp_count = client.load_config(ephraim_md_path)
+        if mcp_count > 0:
+            print_info(f"Loaded {mcp_count} MCP server configs")
+    except Exception:
+        pass
+
+    # Step 11: Transition to planning phase
     state.phase = Phase.PLANNING
     state.execution.max_iterations = config.safety.max_iterations
 

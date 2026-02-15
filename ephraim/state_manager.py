@@ -10,9 +10,7 @@ Key responsibilities:
 - Action history tracking
 """
 
-from dataclasses import dataclass, field
 from typing import Dict, List, Any, Optional, Set
-from datetime import datetime
 
 from .state import EphraimState, Phase, RiskLevel, ActionRecord
 from .config import EphraimConfig
@@ -24,9 +22,9 @@ VALID_TRANSITIONS: Dict[Phase, Set[Phase]] = {
     Phase.BOOT: {Phase.PLANNING},
     Phase.PLANNING: {Phase.AWAITING_APPROVAL, Phase.COMPLETED},
     Phase.AWAITING_APPROVAL: {Phase.PLANNING, Phase.EXECUTING, Phase.COMPLETED},
-    Phase.EXECUTING: {Phase.VALIDATING, Phase.PLANNING},
-    Phase.VALIDATING: {Phase.CI_CHECK, Phase.PLANNING, Phase.COMPLETED},
-    Phase.CI_CHECK: {Phase.COMPLETED, Phase.PLANNING},
+    Phase.EXECUTING: {Phase.VALIDATING, Phase.PLANNING, Phase.COMPLETED},
+    Phase.VALIDATING: {Phase.CI_CHECK, Phase.PLANNING, Phase.COMPLETED, Phase.EXECUTING},
+    Phase.CI_CHECK: {Phase.COMPLETED, Phase.PLANNING, Phase.EXECUTING},
     Phase.COMPLETED: {Phase.PLANNING},  # Can start new task
 }
 
@@ -241,10 +239,31 @@ class StateManager:
         """Estimate current step based on actions taken."""
         if not self.state.current_plan.execution_steps:
             return 0
-        # Simple heuristic: count execution tool uses
+
+        # All tools that represent execution progress
+        execution_tools = {
+            # File modification tools
+            'apply_patch',
+            'write_file',
+            'delete_file',
+            'move_file',
+            'copy_file',
+            # Directory tools
+            'create_directory',
+            'delete_directory',
+            # Command execution
+            'run_command',
+            # Git tools
+            'git_commit',
+            'git_add',
+            # Notebook tools
+            'notebook_edit',
+        }
+
+        # Count execution tool uses
         execution_count = sum(
             1 for a in self.state.action_history
-            if a.tool in ('apply_patch', 'run_command', 'git_commit')
+            if a.tool in execution_tools
         )
         return min(execution_count, len(self.state.current_plan.execution_steps) - 1)
 
@@ -277,31 +296,6 @@ class StateManager:
             "max_iterations": self.state.execution.max_iterations,
             "actions_taken": len(self.state.action_history),
         }
-
-
-@dataclass
-class LLMResponse:
-    """Parsed response from the LLM."""
-    reasoning: str = ""
-    confidence: int = 0
-    risk: str = "LOW"
-    action: str = ""
-    params: Dict[str, Any] = field(default_factory=dict)
-    question: Optional[str] = None
-    plan: Optional[Dict[str, Any]] = None
-
-    @classmethod
-    def from_json(cls, data: Dict[str, Any]) -> "LLMResponse":
-        """Parse LLM response from JSON."""
-        return cls(
-            reasoning=data.get("reasoning", ""),
-            confidence=data.get("confidence", 0),
-            risk=data.get("risk", "LOW"),
-            action=data.get("action", ""),
-            params=data.get("params", {}),
-            question=data.get("question"),
-            plan=data.get("plan"),
-        )
 
 
 def create_state_manager(

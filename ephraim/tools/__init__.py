@@ -22,6 +22,31 @@ from .apply_patch import ApplyPatchTool, preview_patch
 from .run_command import RunCommandTool, run_command_simple
 from .ask_user import AskUserTool
 from .final_answer import FinalAnswerTool, mark_task_complete
+
+# NEW: File creation and management tools
+from .write_file import WriteFileTool, write_file
+from .file_operations import (
+    DeleteFileTool,
+    MoveFileTool,
+    CopyFileTool,
+    delete_file,
+    move_file,
+    copy_file,
+)
+from .directory_tools import (
+    CreateDirectoryTool,
+    DeleteDirectoryTool,
+    create_directory,
+    delete_directory,
+)
+from .search_tools import (
+    GlobSearchTool,
+    GrepSearchTool,
+    glob_search,
+    grep_search,
+)
+
+# Git tools
 from .git_tools import (
     GitStatusTool,
     GitDiffTool,
@@ -32,6 +57,8 @@ from .git_tools import (
     git_commit,
     git_add,
 )
+
+# CI tools
 from .ci_tools import (
     CheckCIStatusTool,
     GetCILogsTool,
@@ -39,6 +66,56 @@ from .ci_tools import (
     check_ci_status,
     get_ci_logs,
     check_ci_result,
+)
+
+# Web tools
+from .web_tools import (
+    WebFetchTool,
+    WebSearchTool,
+    web_fetch,
+    web_search,
+)
+
+# Task management tools
+from .task_tools import (
+    TaskCreateTool,
+    TaskUpdateTool,
+    TaskGetTool,
+    TaskListTool,
+    task_create,
+    task_update,
+    task_list,
+)
+
+# Notebook tools
+from .notebook_tools import (
+    NotebookReadTool,
+    NotebookEditTool,
+    notebook_read,
+    notebook_edit,
+)
+
+# Multimodal tools (images/PDFs)
+from .multimodal_tools import (
+    ReadImageTool,
+    ReadPDFTool,
+    read_image,
+    read_pdf,
+    get_multimodal_status,
+)
+
+# MCP tools
+from .mcp_tools import (
+    MCPConnectTool,
+    MCPDisconnectTool,
+    MCPListToolsTool,
+    MCPCallTool,
+    MCPStatusTool,
+    mcp_connect,
+    mcp_disconnect,
+    mcp_list_tools,
+    mcp_call,
+    mcp_status,
 )
 
 __all__ = [
@@ -50,24 +127,65 @@ __all__ = [
     "ToolRegistry",
     "tool_registry",
     "register_tool",
-    # Tool classes
+    # Original tool classes
     "ReadFileTool",
     "ListDirectoryTool",
     "ApplyPatchTool",
     "RunCommandTool",
     "AskUserTool",
     "FinalAnswerTool",
+    # File management tools
+    "WriteFileTool",
+    "DeleteFileTool",
+    "MoveFileTool",
+    "CopyFileTool",
+    # Directory tools
+    "CreateDirectoryTool",
+    "DeleteDirectoryTool",
+    # Search tools
+    "GlobSearchTool",
+    "GrepSearchTool",
+    # Git tools
     "GitStatusTool",
     "GitDiffTool",
     "GitCommitTool",
     "GitAddTool",
+    # CI tools
     "CheckCIStatusTool",
     "GetCILogsTool",
     "CheckCIResultTool",
+    # Web tools
+    "WebFetchTool",
+    "WebSearchTool",
+    # Task tools
+    "TaskCreateTool",
+    "TaskUpdateTool",
+    "TaskGetTool",
+    "TaskListTool",
+    # Notebook tools
+    "NotebookReadTool",
+    "NotebookEditTool",
+    # Multimodal tools
+    "ReadImageTool",
+    "ReadPDFTool",
+    # MCP tools
+    "MCPConnectTool",
+    "MCPDisconnectTool",
+    "MCPListToolsTool",
+    "MCPCallTool",
+    "MCPStatusTool",
     # Utility functions
     "preview_patch",
     "run_command_simple",
     "mark_task_complete",
+    "write_file",
+    "delete_file",
+    "move_file",
+    "copy_file",
+    "create_directory",
+    "delete_directory",
+    "glob_search",
+    "grep_search",
     "git_status",
     "git_diff",
     "git_commit",
@@ -75,4 +193,19 @@ __all__ = [
     "check_ci_status",
     "get_ci_logs",
     "check_ci_result",
+    "web_fetch",
+    "web_search",
+    "task_create",
+    "task_update",
+    "task_list",
+    "notebook_read",
+    "notebook_edit",
+    "read_image",
+    "read_pdf",
+    "get_multimodal_status",
+    "mcp_connect",
+    "mcp_disconnect",
+    "mcp_list_tools",
+    "mcp_call",
+    "mcp_status",
 ]

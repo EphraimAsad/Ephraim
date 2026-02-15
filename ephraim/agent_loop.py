@@ -13,10 +13,11 @@ from datetime import datetime
 
 from .state import EphraimState, Phase, Plan
 from .config import EphraimConfig
-from .state_manager import StateManager, create_state_manager, LLMResponse as ParsedLLMResponse
+from .state_manager import StateManager, create_state_manager
 from .llm_interface import LLMInterface, create_llm_interface, verify_ollama_connection
 from .tools import tool_registry, ToolResult
 from .boot import load_git_status
+from rich.panel import Panel
 from .logging_setup import (
     print_header,
     print_phase,
@@ -47,9 +48,11 @@ class AgentLoop:
         self,
         state: EphraimState,
         config: EphraimConfig,
+        streaming: bool = True,
     ):
         self.state = state
         self.config = config
+        self.streaming = streaming  # Enable streaming token display
         self.state_manager = create_state_manager(state, config)
 
         # Create both LLM interfaces (planning and execution)
@@ -143,8 +146,11 @@ class AgentLoop:
                 # Build LLM context
                 context = self.state_manager.build_llm_brief()
 
-                # Get LLM response
-                response = self.llm.generate(context, task)
+                # Get LLM response (with streaming if enabled)
+                if self.streaming:
+                    response = self._generate_with_streaming(context, task)
+                else:
+                    response = self.llm.generate(context, task)
 
                 if not response.success:
                     print_error(f"LLM error: {response.error}")
@@ -175,7 +181,22 @@ class AgentLoop:
 
         Returns True to continue loop, False to stop.
         """
-        # Update confidence and risk
+        # Visual separator for new response
+        print_separator()
+
+        # Show full reasoning FIRST in styled panel (ALL phases)
+        if response.get("reasoning"):
+            phase_name = self.state.phase.value.upper()
+            console.print(Panel(
+                response['reasoning'],
+                title=f"[bold cyan]Thinking ({phase_name})[/bold cyan]",
+                border_style="cyan"
+            ))
+        else:
+            # Debug: Show if reasoning is missing
+            console.print("[dim]No reasoning provided by LLM[/dim]")
+
+        # Show confidence and risk after reasoning
         if "confidence" in response:
             self.state_manager.update_confidence(response["confidence"])
             print_confidence(response["confidence"])
@@ -184,17 +205,16 @@ class AgentLoop:
             self.state_manager.update_risk(response["risk"])
             print_risk(response["risk"])
 
-        # Show reasoning
-        if response.get("reasoning"):
-            print_info(f"Reasoning: {response['reasoning'][:200]}...")
+        # Show the action being taken
+        action = response.get("action", "")
+        if action:
+            console.print(f"[bold yellow]Action:[/bold yellow] {action}")
 
         # Check for clarification question
         if response.get("question"):
             return self._handle_question(response["question"])
 
-        # Handle action
-        action = response.get("action", "")
-
+        # Handle action (action already defined above)
         if action == "propose_plan":
             # GUARD: If we already have an approved plan, reject new plan proposals
             if self.state.current_plan.approved:
@@ -226,10 +246,15 @@ class AgentLoop:
                 )
                 return True  # Continue loop with updated prompt
             return self._handle_plan_proposal(response.get("plan", {}))
-        elif action == "final_answer":
-            return self._handle_completion(response)
         else:
-            return self._handle_tool_action(action, response.get("params", {}))
+            # Handle all actions through tool execution (including final_answer)
+            result = self._handle_tool_action(action, response.get("params", {}))
+
+            # If final_answer was called successfully, handle completion
+            if action == "final_answer" and result:
+                return self._handle_completion(response)
+
+            return result
 
     def _handle_question(self, question: str) -> bool:
         """Handle a clarification question from the LLM."""
@@ -309,16 +334,15 @@ class AgentLoop:
                 print_separator()
                 print_info(f">>> Step {current_step + 1}/{total}: {steps[current_step]}")
 
-        # Show tool and key parameters
-        print_info(f"    Tool: {tool_name}")
-        if tool_name == "run_command":
-            print_info(f"    Command: {params.get('command', '')}")
-        elif tool_name == "read_file":
-            print_info(f"    File: {params.get('path', '')}")
-        elif tool_name == "apply_patch":
-            print_info(f"    File: {params.get('path', '')}")
-        elif tool_name == "git_commit":
-            print_info(f"    Message: {params.get('message', '')}")
+        # Show action and all parameters clearly
+        console.print(f"    [bold yellow]Action:[/bold yellow] {tool_name}")
+        if params:
+            for key, value in params.items():
+                # Truncate long values for display
+                display_val = str(value)
+                if len(display_val) > 100:
+                    display_val = display_val[:100] + "..."
+                console.print(f"      [dim]{key}:[/dim] {display_val}")
 
         try:
             result = tool(**params)
@@ -341,20 +365,66 @@ class AgentLoop:
             else:
                 print_error(f"Failed: {result.error}")
 
+            # Check if all plan steps are complete -> transition to VALIDATING
+            if self.state.current_plan.approved and self._all_steps_complete():
+                self._transition_to_validation()
+
             return True
 
         except Exception as e:
             print_error(f"Tool execution failed: {e}")
             return True
 
-    def _handle_completion(self, response: Dict[str, Any]) -> bool:
-        """Handle task completion."""
-        message = response.get("params", {}).get("message", "Task completed")
+    def _all_steps_complete(self) -> bool:
+        """Check if all plan steps have been executed."""
+        if not self.state.current_plan.execution_steps:
+            return False
 
-        print_separator()
-        print_success("TASK COMPLETED")
-        console.print(message)
-        print_separator()
+        current_step = self.state_manager._get_current_step()
+        total_steps = len(self.state.current_plan.execution_steps)
+
+        # Consider complete if we've executed at least as many steps as planned
+        return current_step >= total_steps - 1
+
+    def _transition_to_validation(self) -> None:
+        """Transition to validation phase."""
+        if self.state.phase == Phase.EXECUTING:
+            print_separator()
+            print_phase("VALIDATING")
+            self.state_manager.transition(Phase.VALIDATING)
+
+            # Check if there's a validation plan
+            if self.state.current_plan.validation_plan:
+                print_info(f"Validation plan: {self.state.current_plan.validation_plan}")
+
+    def _transition_to_ci_check(self) -> None:
+        """Transition to CI check phase."""
+        if self.state.phase == Phase.VALIDATING and self.config.ci.enabled:
+            print_separator()
+            print_phase("CI_CHECK")
+            self.state_manager.transition(Phase.CI_CHECK)
+            print_info("Checking CI status...")
+
+    def _handle_validation_complete(self, success: bool) -> None:
+        """Handle validation completion."""
+        if success:
+            if self.config.ci.enabled and self.config.ci.check_after_commit:
+                self._transition_to_ci_check()
+            else:
+                print_info("Validation passed. Skipping CI check (disabled).")
+        else:
+            print_warning("Validation failed. May need to fix issues.")
+
+    def _handle_ci_check_complete(self, success: bool) -> None:
+        """Handle CI check completion."""
+        if success:
+            print_success("CI checks passed!")
+        else:
+            print_warning("CI checks failed. Review may be needed.")
+
+    def _handle_completion(self, response: Dict[str, Any]) -> bool:
+        """Handle task completion after final_answer tool executes."""
+        # Tool already displayed completion message, just handle state
 
         # Persist completion to Context.md
         update_context_md(self.state)
@@ -373,10 +443,134 @@ class AgentLoop:
 
         return False
 
+    def _generate_with_streaming(self, context, task):
+        """
+        Generate LLM response with streaming token display.
+
+        Shows tokens as they arrive, then parses the complete response.
+        """
+        from .llm_interface import LLMResponse
+        import json
+        import re
+
+        print_separator()
+        console.print("[bold cyan]Thinking...[/bold cyan]", end=" ")
+
+        # Collect streamed tokens
+        full_response = ""
+        for token in self.llm.generate_stream(context, task):
+            console.print(token, end="", highlight=False)
+            full_response += token
+
+        console.print()  # Newline after streaming
+
+        # Parse the complete response
+        parsed = self._parse_json_response(full_response)
+
+        if parsed and self._validate_response(parsed):
+            return LLMResponse(
+                raw=full_response,
+                parsed=parsed,
+                success=True,
+            )
+        else:
+            return LLMResponse(
+                raw=full_response,
+                parsed=None,
+                success=False,
+                error="Failed to parse streamed response as valid JSON",
+            )
+
+    def _parse_json_response(self, response: str):
+        """Parse JSON from LLM response."""
+        import json
+        import re
+
+        # Try direct parse first
+        try:
+            return json.loads(response)
+        except json.JSONDecodeError:
+            pass
+
+        # Try extracting from markdown code block
+        json_match = re.search(r'```(?:json)?\s*([\s\S]*?)```', response)
+        if json_match:
+            try:
+                return json.loads(json_match.group(1).strip())
+            except json.JSONDecodeError:
+                pass
+
+        # Try finding JSON object in response
+        brace_start = response.find('{')
+        if brace_start != -1:
+            depth = 0
+            for i, char in enumerate(response[brace_start:], brace_start):
+                if char == '{':
+                    depth += 1
+                elif char == '}':
+                    depth -= 1
+                    if depth == 0:
+                        try:
+                            return json.loads(response[brace_start:i + 1])
+                        except json.JSONDecodeError:
+                            break
+
+        return None
+
+    def _validate_response(self, parsed) -> bool:
+        """Validate that response has required fields."""
+        from .state import RiskLevel
+
+        required_fields = ["reasoning", "action"]
+
+        for field in required_fields:
+            if field not in parsed:
+                return False
+
+        if not isinstance(parsed.get("action"), str):
+            return False
+
+        if "confidence" in parsed:
+            if not isinstance(parsed["confidence"], (int, float)):
+                return False
+
+        if "risk" in parsed:
+            # Validate against RiskLevel enum values
+            valid_risks = {level.value for level in RiskLevel}
+            if parsed["risk"] not in valid_risks:
+                return False
+
+        return True
+
     def _get_next_prompt(self) -> str:
-        """Get the prompt for the next iteration."""
+        """Get the prompt for the next iteration based on current phase."""
         recent_actions = self.state.get_recent_actions(3)
 
+        # Phase-specific prompts
+        if self.state.phase == Phase.VALIDATING:
+            validation_plan = self.state.current_plan.validation_plan
+            if validation_plan:
+                return (
+                    f"VALIDATION PHASE: Execute the validation plan.\n"
+                    f"Validation plan: {validation_plan}\n"
+                    f"Run tests or checks to verify the changes work correctly.\n"
+                    f"Use 'final_answer' when validation is complete."
+                )
+            else:
+                return (
+                    f"VALIDATION PHASE: Verify the changes work correctly.\n"
+                    f"Run any relevant tests or manual verification.\n"
+                    f"Use 'final_answer' when validation is complete."
+                )
+
+        if self.state.phase == Phase.CI_CHECK:
+            return (
+                f"CI CHECK PHASE: Check the CI/CD pipeline status.\n"
+                f"Use 'check_ci_status' or 'check_ci_result' to verify CI passes.\n"
+                f"Use 'final_answer' when CI check is complete."
+            )
+
+        # Default: continue with task
         if recent_actions:
             last_action = recent_actions[-1]
             return (
