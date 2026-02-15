@@ -1,0 +1,189 @@
+Metadata-Version: 2.4
+Name: ephraim
+Version: 0.1.0
+Summary: Senior-Engineer Terminal Coding Agent
+Author: Ephraim Project
+License: MIT
+Keywords: ai,coding,agent,terminal,git
+Classifier: Development Status :: 3 - Alpha
+Classifier: Environment :: Console
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Topic :: Software Development
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: ollama>=0.1.0
+Requires-Dist: rich>=13.0.0
+Provides-Extra: dev
+Requires-Dist: pytest>=7.0.0; extra == "dev"
+Requires-Dist: pytest-cov>=4.0.0; extra == "dev"
+
+# Ephraim
+
+## Senior-Engineer Terminal Coding Agent
+
+Ephraim is a terminal-first, local, Git-aware, CI-aware agentic coding system that behaves like a **senior software engineer**.
+
+## Design Philosophy
+
+- **Safety > Speed** - Human approval required before code changes
+- **Architecture Preservation > Rewrites** - Minimal, targeted edits
+- **Incremental Change > Large Refactors** - Patch-based modifications
+- **Real System Feedback > Speculation** - Uses actual test/CI results
+- **Human Oversight Required** - No autonomous execution
+
+## Current Status
+
+**Phase 1: Foundation** - COMPLETE
+
+Core infrastructure implemented:
+- [x] Project structure
+- [x] Package configuration (pyproject.toml)
+- [x] State object model (state.py)
+- [x] Configuration system (config.py)
+- [x] Logging system (logging_setup.py)
+- [x] Boot sequence (boot.py)
+- [x] CLI entry point (main.py)
+
+**Phase 2: Tool Layer** - COMPLETE
+
+All tools implemented:
+- [x] Base tool class (base.py)
+- [x] read_file tool - Read files with line numbers
+- [x] list_directory tool - List directory contents
+- [x] apply_patch tool - Patch engine with safety checks
+- [x] run_command tool - Live streaming command execution
+- [x] ask_user tool - User interaction/approval
+- [x] final_answer tool - Task completion
+- [x] git_tools - Status, diff, commit, add
+- [x] ci_tools - GitHub Actions integration
+
+**Phase 3: State Manager** - COMPLETE
+
+State management implemented:
+- [x] Phase enforcement (allowed tools per phase)
+- [x] Approval gating
+- [x] LLM brief builder
+- [x] Action history tracking
+
+**Phase 4: LLM Interface** - COMPLETE
+
+Ollama integration implemented:
+- [x] System prompt with JSON schema
+- [x] Response parsing and validation
+- [x] Retry logic for invalid JSON
+- [x] Streaming support
+
+**Phase 5-8: Agent Loop** - COMPLETE
+
+Full agent workflow implemented:
+- [x] Planning phase with full-goal plans
+- [x] Approval workflow
+- [x] Tool execution with phase enforcement
+- [x] Git integration
+- [x] CI monitoring
+- [x] Context.md auto-update
+
+## Installation
+
+```bash
+# Clone or navigate to the project directory
+cd Ephraim
+
+# Install in development mode
+pip install -e .
+```
+
+## Usage
+
+```bash
+# Launch Ephraim
+Ephraim
+```
+
+## Project Structure
+
+```
+ephraim/
+├── pyproject.toml          # Package configuration
+├── README.md               # This file
+├── ephraim/
+│   ├── __init__.py         # Package init
+│   ├── main.py             # CLI entry point
+│   ├── boot.py             # Boot sequence
+│   ├── state.py            # State object model
+│   ├── state_manager.py    # State transitions, LLM brief builder
+│   ├── agent_loop.py       # Main execution loop
+│   ├── llm_interface.py    # Ollama integration
+│   ├── config.py           # Configuration loading
+│   ├── logging_setup.py    # Logging system
+│   └── tools/
+│       ├── __init__.py
+│       ├── base.py         # Base tool class
+│       ├── read_file.py
+│       ├── list_directory.py
+│       ├── apply_patch.py  # Patch engine
+│       ├── run_command.py  # Live streaming
+│       ├── ask_user.py
+│       ├── final_answer.py
+│       ├── git_tools.py    # Git helpers
+│       └── ci_tools.py     # GitHub CLI integration
+```
+
+## Architecture
+
+Ephraim is NOT a chatbot. It is:
+
+> A deterministic engineering workflow engine driven by an LLM.
+
+The LLM reasons. The system controls execution.
+
+```
+User
+  ↓
+Terminal Interface
+  ↓
+State Manager
+  ↓
+LLM Brief Builder
+  ↓
+LLM (Ollama: qwen2.5-coder:14b)
+  ↓
+Structured JSON Action
+  ↓
+Tool Executor
+  ↓
+State Update
+  ↓
+Loop
+```
+
+## Key Concepts
+
+### Ephraim.md (Project Constitution)
+- Architecture constraints
+- Coding standards
+- Protected areas
+- Validation expectations
+- Git rules
+
+### Context.md (Working Memory)
+- Current task progress
+- Recent decisions
+- CI status
+- Next steps
+
+## Requirements
+
+- Python 3.10+
+- Ollama (local LLM server)
+- Git
+- GitHub CLI (`gh`) for CI integration
+
+## License
+
+MIT
