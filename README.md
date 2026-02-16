@@ -57,7 +57,7 @@ Download from [ollama.ai](https://ollama.ai), then pull models:
 
 ```bash
 # Required: Main model
-ollama pull llama3.1:8b
+ollama pull qwen2.5-coder:14b 
 
 # Optional: Vision model for images/PDFs
 ollama pull llava
@@ -67,7 +67,7 @@ ollama pull llava
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/ephraim.git
+git clone https://github.com/EphraimAsad/ephraim.git
 cd ephraim
 
 # Install
