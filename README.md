@@ -2,7 +2,7 @@
 
 **A Senior-Engineer Terminal Coding Agent - Local Claude Code Alternative**
 
-[![Version](https://img.shields.io/badge/version-0.3.0-blue.svg)](https://github.com/EphraimAsad/ephraim)
+[![Version](https://img.shields.io/badge/version-0.4.0-blue.svg)](https://github.com/EphraimAsad/ephraim)
 [![Python](https://img.shields.io/badge/python-3.10+-green.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Ollama](https://img.shields.io/badge/powered%20by-Ollama-orange.svg)](https://ollama.ai)
@@ -18,19 +18,22 @@ Ephraim is a **free, local, privacy-first** terminal coding agent that provides 
 | **Plan-First** | Proposes plans before making changes |
 | **Human Approval** | No code changes without your consent |
 | **Streaming Output** | Real-time token display as the LLM thinks |
-| **36 Built-in Tools** | File ops, search, git, web, MCP, and more |
+| **42 Built-in Tools** | File ops, search, git, web, MCP, multi-agent, and more |
 | **MCP Integration** | Connect to external tool servers |
 | **Multimodal** | Analyze images and PDFs with vision models |
 | **Git & CI Aware** | Understands your repo and CI pipeline |
-| **Extensible** | Hooks, skills, commands, sub-agents |
+| **Multi-Agent** | Spawn parallel sub-agents for complex tasks |
+| **Extensible** | Hooks, skills, commands, training scripts |
 
-## What's New in v0.3.0
+## What's New in v0.4.0
 
-- **Streaming Token Display** - Watch the LLM think in real-time
-- **MCP Integration** - Connect to Model Context Protocol servers for extensible tools
-- **Multimodal Support** - Read images and PDFs using Ollama vision models (llava)
-- **Full Workflow Phases** - VALIDATING and CI_CHECK phases now functional
-- **36 Tools** - Comprehensive tool suite matching Claude Code capabilities
+- **Multi-Agent Coordination** - Spawn parallel agents (EXPLORE, PLAN, EXECUTE, RESEARCH) for complex tasks
+- **6 New Multi-Agent Tools** - `spawn_agent`, `wait_agent`, `wait_all_agents`, `get_agent_status`, `cancel_agent`, `spawn_agents_parallel`
+- **Training Scripts** - Fine-tune your own models with 500K examples (optional, any Ollama model works)
+- **42 Tools** - Now includes multi-agent coordination tools
+
+### Previous: v0.3.0
+- Streaming token display, MCP integration, multimodal support (images/PDFs), full workflow phases
 
 ## Requirements
 
@@ -57,7 +60,7 @@ ollama pull llava
 
 ```bash
 # Clone the repository
-git clone https://github.com/EphraimAsad/ephraim.git
+git clone https://github.com/yourusername/ephraim.git
 cd ephraim
 
 # Install
@@ -131,7 +134,7 @@ Result: Patched at line 12 (+5 lines)
 ...
 ```
 
-## Available Tools (36 Total)
+## Available Tools (42 Total)
 
 ### File Operations
 | Tool | Description |
@@ -210,6 +213,18 @@ Result: Patched at line 12 (+5 lines)
 | `task_update` | Update task status |
 | `task_list` | List all tasks |
 | `task_get` | Get task details |
+
+### Multi-Agent (NEW in v0.4.0)
+| Tool | Description |
+|------|-------------|
+| `spawn_agent` | Spawn a sub-agent for focused tasks |
+| `wait_agent` | Wait for single agent completion |
+| `wait_all_agents` | Wait for multiple agents |
+| `get_agent_status` | Check agent progress |
+| `cancel_agent` | Cancel running agent |
+| `spawn_agents_parallel` | Spawn multiple agents at once |
+
+**Agent Types:** EXPLORE (search codebase), PLAN (design approach), EXECUTE (perform actions), RESEARCH (analysis)
 
 ### User Interaction
 | Tool | Description |
@@ -321,6 +336,8 @@ Steps:
 ephraim/
 ├── pyproject.toml
 ├── README.md
+├── ephFinetune_plan.py      # Planning model training (optional)
+├── ephFinetune_exec.py      # Execution model training (optional)
 ├── ephraim/
 │   ├── __init__.py
 │   ├── main.py              # CLI entry point
@@ -344,7 +361,7 @@ ephraim/
 │   │   ├── client.py
 │   │   └── protocol.py
 │   └── tools/
-│       ├── __init__.py      # Tool registry (36 tools)
+│       ├── __init__.py      # Tool registry (42 tools)
 │       ├── base.py          # Base tool class
 │       ├── read_file.py
 │       ├── write_file.py
@@ -415,6 +432,24 @@ gh auth login
 gh auth status
 ```
 
+## Training Your Own Models (Optional)
+
+Ephraim works with any Ollama model out of the box. For advanced users who want models optimized for Ephraim's JSON schema and workflow:
+
+```bash
+# Training scripts included:
+ephFinetune_plan.py    # Planning model (500K examples)
+ephFinetune_exec.py    # Execution model (500K examples)
+```
+
+**Features:**
+- 500,000 training examples per model
+- Multi-agent coordination patterns included
+- A100 GPU optimized (~10-12 hours total)
+- Exports to GGUF for Ollama
+
+Run on Google Colab with A100 GPU. See training scripts for details.
+
 ## Development
 
 ```bash
@@ -429,6 +464,12 @@ pytest tests/ --cov=ephraim
 ```
 
 ## Changelog
+
+### v0.4.0
+- **Multi-agent coordination system** - Spawn parallel agents (EXPLORE, PLAN, EXECUTE, RESEARCH)
+- **6 new multi-agent tools** - spawn_agent, wait_agent, wait_all_agents, get_agent_status, cancel_agent, spawn_agents_parallel
+- **Training scripts** - Fine-tune custom models with 500K examples
+- **42 tools total** (up from 36)
 
 ### v0.3.0
 - Streaming token display (real-time LLM output)
@@ -470,6 +511,8 @@ pytest tests/ --cov=ephraim
 
 - [x] ~~Plugin system~~ (Done via MCP)
 - [x] ~~Multi-file refactoring~~ (Inherently supported)
+- [x] ~~Multi-agent coordination~~ (Done in v0.4.0)
+- [x] ~~Custom model training~~ (Done in v0.4.0)
 - [ ] Web UI option
 - [ ] More CI systems (GitLab, Jenkins)
 - [ ] Model selection via Ephraim.md

@@ -25,163 +25,63 @@ from .config import ModelConfig
 from .logging_setup import get_logger, print_info, print_warning, print_error
 
 
-# System prompt template
-SYSTEM_PROMPT = """You are Ephraim, a senior software engineer assistant operating in a terminal environment.
+# ============================================================================
+# DUAL-PROMPT ARCHITECTURE
+# Planning and Execution models use separate prompts for better accuracy
+# ============================================================================
 
-## Your Role
-You behave like a careful, experienced senior engineer:
-- Explain your reasoning clearly
-- Prefer minimal, targeted changes over large refactors
-- Never guess about architecture - ask when uncertain
-- Assess risk and confidence before acting
+# Prompt for PLANNING model - ONLY proposes plans, never executes tools
+PLANNING_PROMPT = """## REQUIRED JSON OUTPUT
+You are in PLANNING mode. Propose a plan for user approval.
 
-## Response Format
-You MUST respond with valid JSON only. No markdown, no explanation outside JSON.
+### SCHEMA:
+{{"reasoning": "string", "confidence": 0-100, "risk": "LOW|MEDIUM|HIGH", "action": "propose_plan", "plan": {{"goal_understanding": "...", "execution_steps": ["..."], "validation_plan": "...", "git_strategy": "..."}}}}
 
-Your response must follow this exact schema:
-```json
-{{
-  "reasoning": "Your thought process explaining why you're taking this action",
-  "confidence": <number 0-100>,
-  "risk": "LOW" | "MEDIUM" | "HIGH",
-  "action": "<tool_name>",
-  "params": {{<tool parameters>}},
-  "question": "<optional clarification question if confidence < 80 or risk is HIGH>"
-}}
-```
+### EXAMPLE:
+{{"reasoning": "The user wants a CLI calculator. I will create a Python script with basic arithmetic functions.", "confidence": 85, "risk": "LOW", "action": "propose_plan", "plan": {{"goal_understanding": "Create CLI calculator with add/subtract/multiply/divide", "execution_steps": ["Create calculator.py with menu and input handling", "Add arithmetic functions (add, subtract, multiply, divide)", "Add input validation and error handling", "Test all operations"], "validation_plan": "Run calculator and test each operation manually", "git_strategy": "Single commit: Add CLI calculator"}}}}
 
-If you need to propose a plan, use this schema:
-```json
-{{
-  "reasoning": "Why this plan addresses the goal",
-  "confidence": <number 0-100>,
-  "risk": "LOW" | "MEDIUM" | "HIGH",
-  "action": "propose_plan",
-  "plan": {{
-    "goal_understanding": "What you understand the goal to be",
-    "reasoning": "Why this approach",
-    "execution_steps": ["Step 1", "Step 2", ...],
-    "risk_assessment": "Analysis of risks",
-    "validation_plan": "How to verify the changes work",
-    "git_strategy": "How to commit the changes"
-  }}
-}}
-```
+### IF UNCERTAIN (confidence < 60):
+{{"reasoning": "Need more details about requirements", "confidence": 40, "risk": "LOW", "action": "ask_user", "params": {{"question": "Your clarifying question here"}}}}
 
-## Confidence Scoring
-- 80-100: HIGH - Clear requirements, understood codebase, localized change
-- 55-79: MEDIUM - Some uncertainty, may need clarification
-- 30-54: LOW - Significant uncertainty, should ask questions
-- <30: VERY LOW - Must ask clarification before proceeding
-
-If confidence < 80, you MUST include a "question" field to clarify.
-
-## Risk Assessment
-- LOW: Localized changes, easily reversible, well-tested area
-- MEDIUM: Interface changes, dependency updates, config changes
-- HIGH: Security/auth code, large refactors, destructive operations
-
-If risk is HIGH, you MUST include a "question" field to confirm.
-
-## Available Tools
-{available_tools}
-
-## Current Context
+## CONTEXT
 {context}
 
-## Executing an Approved Plan
-When "approved_plan" exists in the context:
-1. You are in EXECUTION mode - do NOT propose a new plan
-2. Look at "approved_plan.steps" and "approved_plan.current_step"
-3. Execute the current step using available tools (read_file, apply_patch, run_command, etc.)
-4. After each step, proceed to the next step in the plan
-5. Only ask questions if blocked or need clarification for the current step
+You MUST use action="propose_plan" with a plan object. JSON ONLY."""
 
-CRITICAL: When you have an approved_plan, your action MUST be a tool call - NEVER use "propose_plan".
 
-## Working Directory
-All file operations should be relative to "repo_root" provided in the context.
-When using run_command, git commands, or file operations, work within the repository.
+# Prompt for EXECUTION model - ONLY executes tools, never proposes plans
+EXECUTION_PROMPT = """## REQUIRED JSON OUTPUT
+You are in EXECUTION mode. Execute the approved plan using tools.
 
-## Tool Usage Guidelines
+### SCHEMA:
+{{"reasoning": "string", "confidence": 0-100, "risk": "LOW|MEDIUM|HIGH", "action": "tool_name", "params": {{...}}}}
 
-### File Creation & Writing
-- Use `write_file` to CREATE new files (path, content)
-- Use `apply_patch` to EDIT existing files (find/replace)
-- Always use write_file for new files - apply_patch only works on existing files
+### EXAMPLES:
+{{"reasoning": "Creating the calculator file with full implementation", "confidence": 90, "risk": "LOW", "action": "write_file", "params": {{"path": "calculator.py", "content": "#!/usr/bin/env python3\\n# Calculator implementation\\n\\ndef add(a, b):\\n    return a + b\\n..."}}}}
 
-### File Management
-- `delete_file` - Remove files (creates backup by default)
-- `move_file` - Move or rename files
-- `copy_file` - Copy files to new location
+{{"reasoning": "Reading existing code to understand structure", "confidence": 95, "risk": "LOW", "action": "read_file", "params": {{"path": "main.py"}}}}
 
-### Directory Management
-- `create_directory` - Create new folders (creates parents automatically)
-- `delete_directory` - Remove folders (recursive=true for non-empty)
+{{"reasoning": "Running the test suite", "confidence": 85, "risk": "LOW", "action": "run_command", "params": {{"command": "python -m pytest tests/"}}}}
 
-### Search & Discovery
-- `glob_search` - Find files by pattern (e.g., "**/*.py")
-- `grep_search` - Search file contents for text/regex
-- `read_file` - Read file contents with line numbers
-- `list_directory` - List directory contents
+{{"reasoning": "All plan steps completed successfully", "confidence": 95, "risk": "LOW", "action": "final_answer", "params": {{"summary": "Created calculator.py with add, subtract, multiply, divide operations. All tests pass."}}}}
 
-### Execution
-- `run_command` - Execute shell commands with streaming output
+## RULES
+- "action" MUST be a tool name string: write_file, read_file, apply_patch, run_command, final_answer, etc.
+- "params" contains the tool's arguments as an object
+- Follow the approved plan steps in order
+- Use final_answer when all steps are complete
 
-### Git Operations
-- `git_status`, `git_diff`, `git_add`, `git_commit`
+## AVAILABLE TOOLS
+{available_tools}
 
-### Multimodal (if vision model available)
-- `read_image` - Analyze images using AI vision
-- `read_pdf` - Read PDF files (text extraction or vision analysis)
+## CONTEXT
+{context}
 
-### MCP (Model Context Protocol)
-- `mcp_connect` - Connect to an MCP server
-- `mcp_list_tools` - List tools from connected servers
-- `mcp_call` - Call a tool on an MCP server
-- `mcp_status` - Get MCP connection status
+Execute the next plan step. JSON ONLY."""
 
-### Web Tools
-- `web_search` - Search the web using DuckDuckGo
-- `web_fetch` - Fetch and extract content from a URL
 
-### CI Tools
-- `check_ci_status` - Check CI/CD pipeline status
-- `get_ci_logs` - Get logs from CI runs
-- `check_ci_result` - Check result of a specific CI run
-
-### Task Management
-- `task_create` - Create a task for tracking
-- `task_update` - Update task status
-- `task_list` - List all tasks
-
-### Notebook Tools
-- `notebook_read` - Read Jupyter notebook cells
-- `notebook_edit` - Edit Jupyter notebook cells
-
-### Completion
-- `final_answer` - Mark the task as complete with a summary
-
-## Workflow Phases
-1. PLANNING - Propose a plan for approval (use read-only tools)
-2. EXECUTING - Execute the approved plan steps
-3. VALIDATING - Run tests/checks to verify changes work
-4. CI_CHECK - Verify CI/CD pipeline passes (if enabled)
-5. COMPLETED - Task is done
-
-In VALIDATING phase, run the validation_plan from the approved plan.
-In CI_CHECK phase, use CI tools to verify the pipeline.
-
-## Important Rules
-1. ONLY output valid JSON - no other text
-2. Use exact tool names from the available tools list
-3. Always explain your reasoning thoroughly - show your thinking
-4. When uncertain, ask clarifying questions
-5. Prefer reading files before modifying them
-6. Use write_file for NEW files, apply_patch for EDITING existing files
-7. When approved_plan exists, execute steps - do NOT propose a new plan
-8. Use glob_search and grep_search to explore the codebase
-"""
+# Legacy alias for backwards compatibility
+SYSTEM_PROMPT = PLANNING_PROMPT
 
 
 @dataclass
@@ -225,14 +125,22 @@ class LLMInterface:
         context: Dict[str, Any],
         user_message: str,
         max_retries: int = 3,
+        prompt_template: Optional[str] = None,
+        conversation_history: Optional[list] = None,
+        error_context: Optional[Dict[str, Any]] = None,
+        previous_reasoning: Optional[str] = None,
     ) -> LLMResponse:
         """
-        Generate a response from the LLM.
+        Generate a response from the LLM with full context.
 
         Args:
             context: The LLM brief from state manager
             user_message: The current task or user input
             max_retries: Number of retries for invalid JSON
+            prompt_template: Custom prompt template (PLANNING_PROMPT or EXECUTION_PROMPT)
+            conversation_history: List of previous turn messages for context
+            error_context: Information about previous failed action
+            previous_reasoning: LLM's reasoning from last turn
 
         Returns:
             LLMResponse with parsed JSON or error
@@ -246,17 +154,41 @@ class LLMInterface:
             )
 
         # Build system prompt with context
-        system_prompt = self._build_system_prompt(context)
+        system_prompt = self._build_system_prompt(context, prompt_template)
+
+        # Build messages list with conversation history
+        messages = [{"role": "system", "content": system_prompt}]
+
+        # Add conversation history for context (recent turns)
+        if conversation_history:
+            messages.extend(conversation_history[-10:])  # Last 10 exchanges
+
+        # Add error context if previous action failed
+        if error_context:
+            error_msg = (
+                f"PREVIOUS ACTION FAILED:\n"
+                f"  Action: {error_context.get('action', 'unknown')}\n"
+                f"  Error: {error_context.get('error', 'unknown')}\n"
+                f"  Suggestion: {error_context.get('suggestion', 'Try a different approach')}"
+            )
+            messages.append({"role": "system", "content": error_msg})
+
+        # Add previous reasoning to maintain continuity
+        if previous_reasoning:
+            messages.append({
+                "role": "system",
+                "content": f"Your previous reasoning: {previous_reasoning}"
+            })
+
+        # Add current user message
+        messages.append({"role": "user", "content": user_message})
 
         for attempt in range(max_retries):
             try:
                 # Call Ollama
                 response = ollama.chat(
                     model=self.config.model_name,
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_message},
-                    ],
+                    messages=messages,
                     options={
                         "temperature": self.config.temperature,
                         "num_predict": self.config.max_tokens,
@@ -282,12 +214,13 @@ class LLMInterface:
                 else:
                     self.logger.warning(f"Failed to parse JSON (attempt {attempt + 1})")
 
-                # If we have retries left, ask for correction
+                # If we have retries left, ask for correction with specific feedback
                 if attempt < max_retries - 1:
+                    got_keys = list(parsed.keys()) if parsed else []
                     user_message = (
-                        "Your previous response was not valid JSON. "
-                        "Please respond with ONLY a valid JSON object following the schema exactly. "
-                        f"Previous goal: {user_message}"
+                        f"INVALID RESPONSE. Your JSON must have these fields: reasoning, action, confidence, risk. "
+                        f"You returned keys: {got_keys}. "
+                        f"Original task: {user_message}"
                     )
 
             except Exception as e:
@@ -311,25 +244,61 @@ class LLMInterface:
         self,
         context: Dict[str, Any],
         user_message: str,
+        prompt_template: Optional[str] = None,
+        conversation_history: Optional[list] = None,
+        error_context: Optional[Dict[str, Any]] = None,
+        previous_reasoning: Optional[str] = None,
     ) -> Generator[str, None, None]:
         """
-        Generate a streaming response from the LLM.
+        Generate a streaming response from the LLM with full context.
 
         Yields chunks of the response as they arrive.
+
+        Args:
+            context: The LLM brief from state manager
+            user_message: The current task or user input
+            prompt_template: Custom prompt template (PLANNING_PROMPT or EXECUTION_PROMPT)
+            conversation_history: List of previous turn messages for context
+            error_context: Information about previous failed action
+            previous_reasoning: LLM's reasoning from last turn
         """
         if not OLLAMA_AVAILABLE:
             yield '{"error": "Ollama not installed"}'
             return
 
-        system_prompt = self._build_system_prompt(context)
+        system_prompt = self._build_system_prompt(context, prompt_template)
+
+        # Build messages list with conversation history
+        messages = [{"role": "system", "content": system_prompt}]
+
+        # Add conversation history
+        if conversation_history:
+            messages.extend(conversation_history[-10:])
+
+        # Add error context if previous action failed
+        if error_context:
+            error_msg = (
+                f"PREVIOUS ACTION FAILED:\n"
+                f"  Action: {error_context.get('action', 'unknown')}\n"
+                f"  Error: {error_context.get('error', 'unknown')}\n"
+                f"  Suggestion: {error_context.get('suggestion', 'Try a different approach')}"
+            )
+            messages.append({"role": "system", "content": error_msg})
+
+        # Add previous reasoning
+        if previous_reasoning:
+            messages.append({
+                "role": "system",
+                "content": f"Your previous reasoning: {previous_reasoning}"
+            })
+
+        # Add current user message
+        messages.append({"role": "user", "content": user_message})
 
         try:
             stream = ollama.chat(
                 model=self.config.model_name,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_message},
-                ],
+                messages=messages,
                 options={
                     "temperature": self.config.temperature,
                     "num_predict": self.config.max_tokens,
@@ -345,11 +314,22 @@ class LLMInterface:
         except Exception as e:
             yield f'{{"error": "{str(e)}"}}'
 
-    def _build_system_prompt(self, context: Dict[str, Any]) -> str:
-        """Build the system prompt with context."""
-        # Format available tools
+    def _build_system_prompt(
+        self,
+        context: Dict[str, Any],
+        template: Optional[str] = None,
+    ) -> str:
+        """Build the system prompt with context.
+
+        Args:
+            context: The LLM brief from state manager
+            template: Prompt template to use (defaults to PLANNING_PROMPT)
+        """
+        prompt = template or PLANNING_PROMPT
+
+        # Format available tools (only needed for EXECUTION_PROMPT)
         tools_text = ""
-        if "available_tools" in context:
+        if "available_tools" in context and "{available_tools}" in prompt:
             for tool in context["available_tools"]:
                 params = ", ".join(
                     f"{p['name']}: {p['type']}"
@@ -362,8 +342,8 @@ class LLMInterface:
         # Format context
         context_text = json.dumps(context, indent=2, default=str)
 
-        return SYSTEM_PROMPT.format(
-            available_tools=tools_text or "No tools available",
+        return prompt.format(
+            available_tools=tools_text or "N/A",
             context=context_text,
         )
 
@@ -409,22 +389,28 @@ class LLMInterface:
         """Validate that response has required fields."""
         required_fields = ["reasoning", "action"]
 
-        for field in required_fields:
-            if field not in parsed:
-                return False
+        # Check for missing required fields
+        missing = [f for f in required_fields if f not in parsed]
+        if missing:
+            self.logger.warning(f"Response missing required fields: {missing}")
+            self.logger.warning(f"Got keys: {list(parsed.keys())}")
+            return False
 
         # Action must be string
         if not isinstance(parsed.get("action"), str):
+            self.logger.warning(f"'action' must be string, got: {type(parsed.get('action'))}")
             return False
 
         # Confidence must be number if present
         if "confidence" in parsed:
             if not isinstance(parsed["confidence"], (int, float)):
+                self.logger.warning(f"'confidence' must be number, got: {type(parsed['confidence'])}")
                 return False
 
         # Risk must be valid if present
         if "risk" in parsed:
             if parsed["risk"] not in ("LOW", "MEDIUM", "HIGH"):
+                self.logger.warning(f"'risk' must be LOW/MEDIUM/HIGH, got: {parsed['risk']}")
                 return False
 
         return True

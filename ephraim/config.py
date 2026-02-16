@@ -14,7 +14,7 @@ from pathlib import Path
 class ModelConfig:
     """LLM model configuration."""
     provider: str = "ollama"
-    model_name: str = "llama3.1:8b"
+    model_name: str = "Ike-coder:14b"  # Fine-tuned planning model
     endpoint: str = "http://localhost:11434"
     temperature: float = 0.1
     max_tokens: int = 4096
@@ -29,8 +29,8 @@ def get_default_execution_model() -> ModelConfig:
     It should be a more capable model that follows instructions well.
     """
     return ModelConfig(
-        model_name="llama3.1:8b",
-        temperature=0.2,  # Slightly higher for creative problem-solving
+        model_name="BKnight-coder:14b",  # Fine-tuned execution model
+        temperature=0.1,  # Low temp for consistent JSON output
     )
 
 

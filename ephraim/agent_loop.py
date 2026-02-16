@@ -14,7 +14,13 @@ from datetime import datetime
 from .state import EphraimState, Phase, Plan
 from .config import EphraimConfig
 from .state_manager import StateManager, create_state_manager
-from .llm_interface import LLMInterface, create_llm_interface, verify_ollama_connection
+from .llm_interface import (
+    LLMInterface,
+    create_llm_interface,
+    verify_ollama_connection,
+    PLANNING_PROMPT,
+    EXECUTION_PROMPT,
+)
 from .tools import tool_registry, ToolResult
 from .boot import load_git_status
 from rich.panel import Panel
@@ -69,6 +75,16 @@ class AgentLoop:
 
         self.logger = get_logger()
         self._plan_rejection_count = 0  # Track repeated plan proposals
+        self._last_failed_action = None  # Track last failed action
+        self._failed_action_count = 0  # Track repeated failures
+
+        # NEW: Conversation history and error recovery
+        from .conversation import ConversationHistory
+        from .recovery import RecoveryStrategy
+        self.conversation = ConversationHistory(max_turns=20)
+        self.recovery = RecoveryStrategy()
+        self._last_reasoning = None  # Preserve LLM's reasoning for next turn
+        self._error_context = None   # Error context for recovery
 
     def run(self) -> None:
         """
@@ -146,11 +162,17 @@ class AgentLoop:
                 # Build LLM context
                 context = self.state_manager.build_llm_brief()
 
+                # Select prompt based on phase
+                if self.state.phase == Phase.PLANNING:
+                    prompt = PLANNING_PROMPT
+                else:
+                    prompt = EXECUTION_PROMPT
+
                 # Get LLM response (with streaming if enabled)
                 if self.streaming:
                     response = self._generate_with_streaming(context, task)
                 else:
-                    response = self.llm.generate(context, task)
+                    response = self.llm.generate(context, task, prompt_template=prompt)
 
                 if not response.success:
                     print_error(f"LLM error: {response.error}")
@@ -356,14 +378,65 @@ class AgentLoop:
                 success=result.success,
             )
 
-            # Reset plan rejection counter on successful tool execution
-            self._plan_rejection_count = 0
+            # Record turn in conversation history
+            from .conversation import Turn
+            from .recovery import create_error_context
+            self.conversation.add_turn(Turn(
+                user_message=self.state.current_goal,
+                llm_reasoning=self._last_reasoning or "",
+                llm_action=tool_name,
+                llm_params=params,
+                tool_success=result.success,
+                tool_summary=result.summary,
+                tool_error=result.error,
+                tool_data=result.data,
+                phase=self.state.phase
+            ))
 
             # Show result
             if result.success:
                 print_success(f"Result: {result.summary}")
+                # Reset counters on success
+                self._plan_rejection_count = 0
+                self._failed_action_count = 0
+                self._last_failed_action = None
+                self._error_context = None
             else:
                 print_error(f"Failed: {result.error}")
+
+                # Track repeated failures
+                action_key = f"{tool_name}:{str(params)}"
+                if self._last_failed_action == action_key:
+                    self._failed_action_count += 1
+                else:
+                    self._last_failed_action = action_key
+                    self._failed_action_count = 1
+
+                # Use recovery system to analyze error and suggest fix
+                error_ctx = create_error_context(
+                    action=tool_name,
+                    error=result.error or "Unknown error",
+                    params=params,
+                    attempt=self._failed_action_count,
+                    phase=self.state.phase.value,
+                    reasoning=self._last_reasoning or ""
+                )
+
+                if self.recovery.should_retry(error_ctx):
+                    # Get recovery suggestion for next LLM call
+                    suggestion = self.recovery.analyze_error(error_ctx)
+                    self._error_context = {
+                        "action": tool_name,
+                        "error": result.error,
+                        "suggestion": suggestion.reasoning,
+                        "suggested_action": suggestion.action
+                    }
+                    print_info(f"Recovery suggestion: {suggestion.reasoning}")
+                elif self._failed_action_count >= 3:
+                    # Give up after 3 failures with no recovery path
+                    print_warning(f"Action failed {self._failed_action_count} times. Forcing task completion.")
+                    self._force_completion(tool_name, result.error)
+                    return False
 
             # Check if all plan steps are complete -> transition to VALIDATING
             if self.state.current_plan.approved and self._all_steps_complete():
@@ -385,6 +458,32 @@ class AgentLoop:
 
         # Consider complete if we've executed at least as many steps as planned
         return current_step >= total_steps - 1
+
+    def _force_completion(self, failed_tool: str, error: str) -> None:
+        """Force task completion after repeated failures."""
+        from .context_persistence import update_context_md
+
+        print_separator()
+        print_warning("Task completed with issues due to repeated action failures.")
+        print_info(f"Failed action: {failed_tool}")
+        print_info(f"Error: {error}")
+
+        # Persist to Context.md
+        update_context_md(self.state)
+
+        # Transition to completed
+        self.state_manager.transition(Phase.COMPLETED)
+
+        # Reset for next task
+        self.state.current_goal = ""
+        self.state.current_plan = Plan()
+        self.state.execution.iteration = 0
+        self._failed_action_count = 0
+        self._last_failed_action = None
+
+        # Switch back to planning model
+        self.llm = self.planning_llm
+        print_info(f"Switched back to planning model: {self.config.model.model_name}")
 
     def _transition_to_validation(self) -> None:
         """Transition to validation phase."""
@@ -448,26 +547,58 @@ class AgentLoop:
         Generate LLM response with streaming token display.
 
         Shows tokens as they arrive, then parses the complete response.
+        Uses PLANNING_PROMPT or EXECUTION_PROMPT based on current phase.
+        Includes conversation history and error context for better responses.
         """
         from .llm_interface import LLMResponse
         import json
         import re
 
+        # Select prompt based on phase
+        if self.state.phase == Phase.PLANNING:
+            prompt = PLANNING_PROMPT
+        else:
+            prompt = EXECUTION_PROMPT
+
         print_separator()
         console.print("[bold cyan]Thinking...[/bold cyan]", end=" ")
 
-        # Collect streamed tokens
+        # Get conversation history for context
+        conv_history = self.conversation.get_context_messages(max_recent=5)
+
+        # Prepare error context if last action failed
+        error_ctx = None
+        if self._error_context:
+            error_ctx = {
+                "action": self._error_context.get("action", ""),
+                "error": self._error_context.get("error", ""),
+                "suggestion": self._error_context.get("suggestion", ""),
+            }
+
+        # Collect streamed tokens with full context
         full_response = ""
-        for token in self.llm.generate_stream(context, task):
+        for token in self.llm.generate_stream(
+            context,
+            task,
+            prompt_template=prompt,
+            conversation_history=conv_history,
+            error_context=error_ctx,
+            previous_reasoning=self._last_reasoning
+        ):
             console.print(token, end="", highlight=False)
             full_response += token
 
         console.print()  # Newline after streaming
 
+        # Clear error context after using it
+        self._error_context = None
+
         # Parse the complete response
         parsed = self._parse_json_response(full_response)
 
         if parsed and self._validate_response(parsed):
+            # Preserve reasoning for next turn
+            self._last_reasoning = parsed.get("reasoning", "")
             return LLMResponse(
                 raw=full_response,
                 parsed=parsed,
@@ -545,6 +676,28 @@ class AgentLoop:
     def _get_next_prompt(self) -> str:
         """Get the prompt for the next iteration based on current phase."""
         recent_actions = self.state.get_recent_actions(3)
+
+        # EXECUTING phase - give clear step-by-step instructions
+        if self.state.phase == Phase.EXECUTING:
+            steps = self.state.current_plan.execution_steps
+            current_step_idx = self.state_manager._get_current_step()
+
+            if steps and current_step_idx < len(steps):
+                current_step = steps[current_step_idx]
+                steps_text = "\n".join(
+                    f"  {'-->' if i == current_step_idx else '   '} {i+1}. {step}"
+                    for i, step in enumerate(steps)
+                )
+                return (
+                    f"EXECUTE STEP {current_step_idx + 1}: {current_step}\n\n"
+                    f"Approved plan:\n{steps_text}\n\n"
+                    f"Use a tool to complete this step. Respond with JSON containing action and params."
+                )
+            else:
+                return (
+                    f"All plan steps complete. Use 'final_answer' to summarize what was done.\n"
+                    f"Original goal: {self.state.current_goal}"
+                )
 
         # Phase-specific prompts
         if self.state.phase == Phase.VALIDATING:

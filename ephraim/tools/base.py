@@ -26,11 +26,25 @@ class ToolResult:
     Standardized result from tool execution.
 
     All tools return this structure for consistent handling.
+
+    Enhanced fields for error recovery and context passing:
+    - detailed_summary: Full description (not truncated)
+    - intermediate_steps: Progress during execution
+    - suggestions: What to do next on failure
+    - context_for_next: Data to pass to next action
+    - error_type: Classification for recovery strategy
     """
     success: bool
     data: Dict[str, Any] = field(default_factory=dict)
     error: Optional[str] = None
     summary: str = ""
+
+    # Enhanced fields for better LLM context
+    detailed_summary: str = ""
+    intermediate_steps: List[str] = field(default_factory=list)
+    suggestions: List[str] = field(default_factory=list)
+    context_for_next: Dict[str, Any] = field(default_factory=dict)
+    error_type: str = ""  # not_found, permission, validation, etc.
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for serialization."""
@@ -39,17 +53,49 @@ class ToolResult:
             "data": self.data,
             "error": self.error,
             "summary": self.summary,
+            "detailed_summary": self.detailed_summary,
+            "intermediate_steps": self.intermediate_steps,
+            "suggestions": self.suggestions,
+            "context_for_next": self.context_for_next,
+            "error_type": self.error_type,
         }
 
     @classmethod
-    def ok(cls, data: Dict[str, Any], summary: str = "") -> "ToolResult":
-        """Create a successful result."""
-        return cls(success=True, data=data, summary=summary)
+    def ok(
+        cls,
+        data: Dict[str, Any],
+        summary: str = "",
+        detailed_summary: str = "",
+        suggestions: Optional[List[str]] = None,
+        context_for_next: Optional[Dict[str, Any]] = None
+    ) -> "ToolResult":
+        """Create a successful result with optional enhanced fields."""
+        return cls(
+            success=True,
+            data=data,
+            summary=summary,
+            detailed_summary=detailed_summary or summary,
+            suggestions=suggestions or [],
+            context_for_next=context_for_next or {}
+        )
 
     @classmethod
-    def fail(cls, error: str, data: Optional[Dict[str, Any]] = None) -> "ToolResult":
-        """Create a failed result."""
-        return cls(success=False, error=error, data=data or {}, summary=f"Error: {error}")
+    def fail(
+        cls,
+        error: str,
+        data: Optional[Dict[str, Any]] = None,
+        error_type: str = "",
+        suggestions: Optional[List[str]] = None
+    ) -> "ToolResult":
+        """Create a failed result with optional recovery hints."""
+        return cls(
+            success=False,
+            error=error,
+            data=data or {},
+            summary=f"Error: {error}",
+            error_type=error_type,
+            suggestions=suggestions or []
+        )
 
 
 @dataclass
