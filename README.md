@@ -528,3 +528,6 @@ MIT License - see [LICENSE](LICENSE) for details.
 - [Rich](https://github.com/Textualize/rich) - Terminal UI
 - [DuckDuckGo](https://duckduckgo.com) - Free web search
 - Inspired by Claude Code's capabilities, built for local use
+
+## Creator 
+Zain Asad
