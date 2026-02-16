@@ -531,4 +531,7 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 ## Creator 
 Zain Asad & Adam Akhter
+
+## Feel free to contact at
 www.linkedin.com/in/zain-asad-1998eph
+www.linkedin.com/in/adam-akhter
