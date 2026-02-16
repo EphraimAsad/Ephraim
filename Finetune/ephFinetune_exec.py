@@ -2,17 +2,20 @@
 """
 Ephraim Execution Model Fine-Tuning Script
 ===========================================
-Generates 500,000 training examples for the execution model (BKnight-coder:14b).
+Generates 600,000 training examples for the execution model (BKnight-coder:14b).
 
 The execution model ONLY executes tools. It never proposes plans.
 It receives approved plan steps and outputs tool calls.
 
-This file covers:
-- All 36 tools with multiple examples each
-- Context-aware patterns (read before edit)
-- Error recovery patterns
-- Production-quality code generation
-- Multi-agent operations (NEW): spawn, wait, coordinate agents
+v0.5.0 Updates:
+- 600K total examples (up from 500K)
+- 61 tools with multiple examples each
+- Git extended operations: push, pull, branch, checkout, merge, stash
+- CI/CD operations: wait_for_ci, analyze_ci_failure, suggest_ci_fix, trigger_workflow, pr_status
+- GitHub operations: gh_pr_create, gh_pr_list, gh_pr_review, gh_issue_create, gh_issue_list, gh_issue_comment
+- Test operations: run_tests, analyze_test_failure, suggest_test_fix, coverage_report
+- Analysis operations: find_references, find_definition, analyze_imports, dead_code_check
+- Multi-agent operations: spawn, wait, coordinate agents
 
 Run this on Google Colab with A100 GPU (40GB VRAM).
 """
@@ -1196,20 +1199,218 @@ def generate_parallel_spawn_example(pattern: Dict) -> Dict[str, Any]:
     }
 
 
-def generate_execution_dataset(num_examples: int = 500000) -> List[Dict[str, Any]]:
+# =============================================================================
+# NEW TOOL EXAMPLE GENERATORS (v0.5.0)
+# =============================================================================
+
+def generate_git_extended_example(action: str, params: Dict, description: str) -> Dict[str, Any]:
+    """Generate examples for extended git tools (push, pull, branch, checkout, merge, stash)."""
+    risk_map = {
+        "git_push": "MEDIUM",
+        "git_pull": "MEDIUM",
+        "git_branch": "LOW",
+        "git_checkout": "MEDIUM",
+        "git_merge": "HIGH",
+        "git_stash": "LOW",
+    }
+    instruction = f"EXECUTE STEP: {description}"
+    output = {
+        "reasoning": f"I need to {description.lower()}.",
+        "confidence": random.randint(85, 95),
+        "risk": risk_map.get(action, "MEDIUM"),
+        "action": action,
+        "params": params
+    }
+    output_json = json.dumps(output)
+    text = f"""### Instruction:
+{instruction}
+
+### Response:
+{output_json}"""
+    return {
+        "instruction": instruction,
+        "input": "",
+        "output": output_json,
+        "text": text
+    }
+
+
+def generate_ci_tool_example(action: str, params: Dict, description: str) -> Dict[str, Any]:
+    """Generate examples for CI tools (wait_for_ci, analyze_ci_failure, suggest_ci_fix, etc.)."""
+    instruction = f"EXECUTE STEP: {description}"
+    output = {
+        "reasoning": f"I need to {description.lower()} to ensure CI passes.",
+        "confidence": random.randint(80, 95),
+        "risk": "LOW" if action in ["check_ci_status", "pr_status"] else "MEDIUM",
+        "action": action,
+        "params": params
+    }
+    output_json = json.dumps(output)
+    text = f"""### Instruction:
+{instruction}
+
+### Response:
+{output_json}"""
+    return {
+        "instruction": instruction,
+        "input": "",
+        "output": output_json,
+        "text": text
+    }
+
+
+def generate_github_tool_example(action: str, params: Dict, description: str) -> Dict[str, Any]:
+    """Generate examples for GitHub tools (gh_pr_create, gh_issue_create, etc.)."""
+    instruction = f"EXECUTE STEP: {description}"
+    output = {
+        "reasoning": f"I need to {description.lower()}.",
+        "confidence": random.randint(85, 95),
+        "risk": "MEDIUM",
+        "action": action,
+        "params": params
+    }
+    output_json = json.dumps(output)
+    text = f"""### Instruction:
+{instruction}
+
+### Response:
+{output_json}"""
+    return {
+        "instruction": instruction,
+        "input": "",
+        "output": output_json,
+        "text": text
+    }
+
+
+def generate_test_tool_example(action: str, params: Dict, description: str) -> Dict[str, Any]:
+    """Generate examples for test tools (run_tests, analyze_test_failure, etc.)."""
+    instruction = f"EXECUTE STEP: {description}"
+    output = {
+        "reasoning": f"I need to {description.lower()} to verify the code works.",
+        "confidence": random.randint(85, 95),
+        "risk": "LOW",
+        "action": action,
+        "params": params
+    }
+    output_json = json.dumps(output)
+    text = f"""### Instruction:
+{instruction}
+
+### Response:
+{output_json}"""
+    return {
+        "instruction": instruction,
+        "input": "",
+        "output": output_json,
+        "text": text
+    }
+
+
+def generate_analysis_tool_example(action: str, params: Dict, description: str) -> Dict[str, Any]:
+    """Generate examples for analysis tools (find_references, find_definition, etc.)."""
+    instruction = f"EXECUTE STEP: {description}"
+    output = {
+        "reasoning": f"I need to {description.lower()} to understand the codebase.",
+        "confidence": random.randint(85, 95),
+        "risk": "LOW",
+        "action": action,
+        "params": params
+    }
+    output_json = json.dumps(output)
+    text = f"""### Instruction:
+{instruction}
+
+### Response:
+{output_json}"""
+    return {
+        "instruction": instruction,
+        "input": "",
+        "output": output_json,
+        "text": text
+    }
+
+
+# Example data for new tools
+GIT_EXTENDED_EXAMPLES = [
+    ("git_push", {"remote": "origin", "branch": "main"}, "Push changes to remote"),
+    ("git_push", {"remote": "origin", "branch": "feature/login", "set_upstream": True}, "Push feature branch with upstream"),
+    ("git_pull", {"remote": "origin", "branch": "main"}, "Pull latest changes from main"),
+    ("git_pull", {"remote": "origin", "rebase": True}, "Pull with rebase"),
+    ("git_branch", {"action": "create", "name": "feature/new-feature"}, "Create new feature branch"),
+    ("git_branch", {"action": "list"}, "List all branches"),
+    ("git_branch", {"action": "delete", "name": "feature/old-feature"}, "Delete merged branch"),
+    ("git_checkout", {"target": "main"}, "Switch to main branch"),
+    ("git_checkout", {"target": "feature/login", "create_branch": True}, "Create and switch to new branch"),
+    ("git_merge", {"branch": "feature/login"}, "Merge feature branch"),
+    ("git_merge", {"branch": "develop", "no_ff": True}, "Merge with merge commit"),
+    ("git_stash", {"action": "push", "message": "WIP changes"}, "Stash current changes"),
+    ("git_stash", {"action": "pop"}, "Pop stashed changes"),
+    ("git_stash", {"action": "list"}, "List all stashes"),
+]
+
+CI_TOOL_EXAMPLES = [
+    ("wait_for_ci", {"timeout": 600}, "Wait for CI to complete"),
+    ("wait_for_ci", {"run_id": 12345, "timeout": 300}, "Wait for specific CI run"),
+    ("analyze_ci_failure", {"run_id": 12345}, "Analyze why CI failed"),
+    ("suggest_ci_fix", {"run_id": 12345}, "Get suggestions to fix CI failure"),
+    ("trigger_workflow", {"workflow": "ci.yml"}, "Trigger CI workflow"),
+    ("trigger_workflow", {"workflow": "deploy.yml", "ref": "main"}, "Trigger deployment workflow"),
+    ("pr_status", {}, "Check PR status for current branch"),
+    ("pr_status", {"pr_number": 42}, "Check status of specific PR"),
+]
+
+GITHUB_TOOL_EXAMPLES = [
+    ("gh_pr_create", {"title": "Add user authentication", "body": "Implements login/logout", "base": "main"}, "Create pull request"),
+    ("gh_pr_create", {"title": "Fix bug", "draft": True}, "Create draft PR"),
+    ("gh_pr_list", {"state": "open"}, "List open pull requests"),
+    ("gh_pr_review", {"pr_number": 42, "action": "approve"}, "Approve pull request"),
+    ("gh_pr_review", {"pr_number": 42, "action": "request-changes", "body": "Please fix tests"}, "Request changes on PR"),
+    ("gh_issue_create", {"title": "Bug: Login fails", "labels": ["bug"]}, "Create bug issue"),
+    ("gh_issue_list", {"state": "open", "label": "bug"}, "List open bug issues"),
+    ("gh_issue_comment", {"number": 42, "body": "Fixed in #43"}, "Add comment to issue"),
+]
+
+TEST_TOOL_EXAMPLES = [
+    ("run_tests", {}, "Run all tests"),
+    ("run_tests", {"path": "tests/test_auth.py"}, "Run specific test file"),
+    ("run_tests", {"pattern": "test_login"}, "Run tests matching pattern"),
+    ("run_tests", {"coverage": True}, "Run tests with coverage"),
+    ("analyze_test_failure", {"test_output": "AssertionError: expected 5 but got 4"}, "Analyze test failure"),
+    ("suggest_test_fix", {"test_output": "ImportError: No module named 'utils'"}, "Suggest fix for failing test"),
+    ("coverage_report", {}, "Generate coverage report"),
+    ("coverage_report", {"min_coverage": 80}, "Check coverage meets threshold"),
+]
+
+ANALYSIS_TOOL_EXAMPLES = [
+    ("find_references", {"symbol": "authenticate_user"}, "Find all usages of function"),
+    ("find_references", {"symbol": "User", "file_types": ["py"]}, "Find references to User class"),
+    ("find_definition", {"symbol": "process_payment"}, "Find where function is defined"),
+    ("find_definition", {"symbol": "Config"}, "Find class definition"),
+    ("analyze_imports", {"file_path": "src/main.py"}, "Analyze imports in file"),
+    ("analyze_imports", {"file_path": "src/"}, "Analyze imports across directory"),
+    ("dead_code_check", {"path": "src/"}, "Find unused code"),
+    ("dead_code_check", {"path": ".", "file_types": ["py", "js"]}, "Check for dead code in multiple languages"),
+]
+
+
+def generate_execution_dataset(num_examples: int = 600000) -> List[Dict[str, Any]]:
     """Generate the full execution training dataset.
 
-    Dataset composition for 500K examples:
-    - write_file examples: ~70K (14%)
-    - read_file patterns: ~45K (9%)
-    - apply_patch variations: ~45K (9%)
-    - run_command scenarios: ~35K (7%)
-    - final_answer (CRITICAL): ~100K (20%)
-    - Context-aware (read before edit): ~70K (14%)
-    - Error recovery patterns: ~70K (14%)
-    - Git workflow: ~30K (6%)
-    - Multi-agent operations (NEW): ~25K (5%)
-    - Other tools (glob, grep, etc.): ~10K (2%)
+    Dataset composition for 600K examples:
+    - write_file examples: ~84K (14%)
+    - read_file patterns: ~54K (9%)
+    - apply_patch variations: ~54K (9%)
+    - run_command scenarios: ~42K (7%)
+    - final_answer (CRITICAL): ~120K (20%)
+    - Context-aware (read before edit): ~60K (10%)
+    - Error recovery patterns: ~60K (10%)
+    - Git extended (push, pull, branch, etc.): ~36K (6%)
+    - CI/CD tools: ~24K (4%)
+    - GitHub tools: ~18K (3%)
+    - Test tools: ~18K (3%)
+    - Analysis tools: ~12K (2%)
+    - Multi-agent operations: ~18K (3%)
     """
 
     examples = []
@@ -1317,6 +1518,60 @@ def generate_execution_dataset(num_examples: int = 500000) -> List[Dict[str, Any
         multi_agent_count += 1
 
     print(f"    Added {multi_agent_count} multi-agent examples")
+
+    # =========================================================================
+    # NEW TOOL EXAMPLES (v0.5.0)
+    # =========================================================================
+
+    # Git extended tools (6% = 36K)
+    print("  Adding git extended tool examples...")
+    git_extended_target = int(num_examples * 0.06)
+    git_extended_count = 0
+    while git_extended_count < git_extended_target:
+        action, params, desc = random.choice(GIT_EXTENDED_EXAMPLES)
+        examples.append(generate_git_extended_example(action, params, desc))
+        git_extended_count += 1
+    print(f"    Added {git_extended_count} git extended examples")
+
+    # CI/CD tools (4% = 24K)
+    print("  Adding CI/CD tool examples...")
+    ci_target = int(num_examples * 0.04)
+    ci_count = 0
+    while ci_count < ci_target:
+        action, params, desc = random.choice(CI_TOOL_EXAMPLES)
+        examples.append(generate_ci_tool_example(action, params, desc))
+        ci_count += 1
+    print(f"    Added {ci_count} CI/CD examples")
+
+    # GitHub tools (3% = 18K)
+    print("  Adding GitHub tool examples...")
+    github_target = int(num_examples * 0.03)
+    github_count = 0
+    while github_count < github_target:
+        action, params, desc = random.choice(GITHUB_TOOL_EXAMPLES)
+        examples.append(generate_github_tool_example(action, params, desc))
+        github_count += 1
+    print(f"    Added {github_count} GitHub examples")
+
+    # Test tools (3% = 18K)
+    print("  Adding test tool examples...")
+    test_target = int(num_examples * 0.03)
+    test_count = 0
+    while test_count < test_target:
+        action, params, desc = random.choice(TEST_TOOL_EXAMPLES)
+        examples.append(generate_test_tool_example(action, params, desc))
+        test_count += 1
+    print(f"    Added {test_count} test examples")
+
+    # Analysis tools (2% = 12K)
+    print("  Adding analysis tool examples...")
+    analysis_target = int(num_examples * 0.02)
+    analysis_count = 0
+    while analysis_count < analysis_target:
+        action, params, desc = random.choice(ANALYSIS_TOOL_EXAMPLES)
+        examples.append(generate_analysis_tool_example(action, params, desc))
+        analysis_count += 1
+    print(f"    Added {analysis_count} analysis examples")
 
     # =========================================================================
     # STANDARD PATTERNS
@@ -1549,32 +1804,75 @@ SYSTEM """You are Ephraim's execution model (BKnight-coder). You ONLY execute to
 REQUIRED OUTPUT FORMAT (JSON):
 {"reasoning": "why this action", "confidence": 0-100, "risk": "LOW|MEDIUM|HIGH", "action": "tool_name", "params": {...}}
 
-AVAILABLE TOOLS:
+AVAILABLE TOOLS (61 total):
+
 File Operations:
 - write_file: Create/overwrite file {"path": "...", "content": "..."}
 - read_file: Read file {"path": "..."}
 - apply_patch: Edit file {"path": "...", "find": "...", "replace": "..."}
+- delete_file, move_file, copy_file: File management
+- list_directory, create_directory, delete_directory: Directory ops
 - run_command: Run shell command {"command": "..."}
 - glob_search: Find files {"pattern": "**/*.py"}
 - grep_search: Search code {"pattern": "..."}
 
-Git Operations:
-- git_status, git_diff, git_add, git_commit: Git operations
+Git Operations (10 tools):
+- git_status, git_diff, git_add, git_commit: Basic git operations
+- git_push: Push to remote {"remote": "origin", "branch": "main"}
+- git_pull: Pull from remote {"remote": "origin"}
+- git_branch: Manage branches {"action": "create|list|delete", "name": "..."}
+- git_checkout: Switch branches {"target": "...", "create_branch": false}
+- git_merge: Merge branches {"branch": "..."}
+- git_stash: Stash changes {"action": "push|pop|list"}
 
-Multi-Agent Operations (NEW):
-- spawn_agent: Spawn sub-agent {"task": "...", "agent_type": "EXPLORE|RESEARCH|EXECUTE|PLAN", "context": {...}}
+CI/CD Operations (8 tools):
+- check_ci_status, get_ci_logs, check_ci_result: CI status
+- wait_for_ci: Wait for CI {"timeout": 600}
+- analyze_ci_failure: Analyze failure {"run_id": 123}
+- suggest_ci_fix: Get fix suggestions {"run_id": 123}
+- trigger_workflow: Trigger CI {"workflow": "ci.yml"}
+- pr_status: Check PR status {"pr_number": 42}
+
+GitHub Operations (6 tools):
+- gh_pr_create: Create PR {"title": "...", "body": "...", "base": "main"}
+- gh_pr_list: List PRs {"state": "open"}
+- gh_pr_review: Review PR {"pr_number": 42, "action": "approve"}
+- gh_issue_create: Create issue {"title": "...", "labels": [...]}
+- gh_issue_list: List issues {"state": "open"}
+- gh_issue_comment: Comment on issue {"number": 42, "body": "..."}
+
+Test Operations (4 tools):
+- run_tests: Run tests {"path": "...", "coverage": true}
+- analyze_test_failure: Analyze failure {"test_output": "..."}
+- suggest_test_fix: Suggest fix {"test_output": "..."}
+- coverage_report: Get coverage {"min_coverage": 80}
+
+Analysis Operations (4 tools):
+- find_references: Find usages {"symbol": "function_name"}
+- find_definition: Find definition {"symbol": "class_name"}
+- analyze_imports: Analyze imports {"file_path": "..."}
+- dead_code_check: Find unused code {"path": "..."}
+
+Multi-Agent Operations (6 tools):
+- spawn_agent: Spawn sub-agent {"task": "...", "agent_type": "EXPLORE|RESEARCH|EXECUTE|PLAN"}
 - wait_agent: Wait for agent {"agent_id": "...", "timeout": 60}
 - wait_all_agents: Wait for multiple {"agent_ids": [...], "timeout": 120}
 - get_agent_status: Check agent {"agent_id": "..."}
 - cancel_agent: Cancel agent {"agent_id": "..."}
-- spawn_agents_parallel: Spawn multiple {"agents": [{"task": "...", "agent_type": "..."}]}
+- spawn_agents_parallel: Spawn multiple {"agents": [...]}
 
 Completion:
 - final_answer: Complete task {"summary": "..."}
+- ask_user: Ask for clarification {"question": "..."}
 
 RULES:
 - Read files BEFORE editing to understand structure
-- Use spawn_agent for focused sub-tasks that can run in parallel
+- Use git_push/git_pull for remote operations
+- Use CI tools to ensure tests pass
+- Use GitHub tools for PR/issue management
+- Use test tools to verify changes
+- Use analysis tools to understand codebase
+- Use spawn_agent for focused sub-tasks
 - Wait for agent results before using them
 - If an action fails, adapt your approach
 - Use final_answer when all steps are complete
@@ -1596,14 +1894,15 @@ def main():
     print("="*60)
     print("BKNIGHT-CODER EXECUTION MODEL FINE-TUNING")
     print("="*60)
-    print(f"\nGenerating 500,000 execution training examples...")
+    print(f"\nGenerating 600,000 execution training examples...")
     print("Base model: qwen2.5-coder:14b")
     print("Output: BKnight-coder:14b")
     print("GPU: A100 (batch_size=4, effective_batch=16)")
+    print("Tools: 61 total (Git, CI, GitHub, Test, Analysis, Multi-Agent)")
     print("="*60 + "\n")
 
     # Generate dataset
-    examples = generate_execution_dataset(500000)
+    examples = generate_execution_dataset(600000)
     save_dataset(examples, "execution_training.jsonl")
 
     # Train model

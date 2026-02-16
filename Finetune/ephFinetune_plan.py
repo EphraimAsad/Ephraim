@@ -2,13 +2,19 @@
 """
 Ephraim Planning Model Fine-Tuning Script
 ==========================================
-Generates 500,000 training examples for the planning model (Ike-coder:14b).
+Generates 600,000 training examples for the planning model (Ike-coder:14b).
 
 The planning model ONLY proposes plans with action="propose_plan".
 It never executes tools directly.
 
-NEW: Includes multi-agent coordination training (~25K examples).
-The model learns when/how to spawn parallel agents for efficiency.
+v0.5.0 Updates:
+- 600K total examples (up from 500K)
+- Multi-agent coordination training (~30K examples)
+- Git workflow training (push, pull, branch, merge, etc.)
+- CI/CD workflow training (wait, analyze, fix, PR status)
+- GitHub integration training (PR create, issues, reviews)
+- Testing workflow training (run tests, analyze failures, coverage)
+- Code analysis training (find references, dead code, imports)
 
 Run this on Google Colab with A100 GPU (40GB VRAM).
 """
@@ -293,6 +299,146 @@ PERFORMANCE_TASKS = [
      ["Enable gzip compression", "Configure compression middleware", "Set compression level", "Test compressed responses"]),
 ]
 
+# Category 11: Git Workflows (NEW - 15 templates)
+GIT_WORKFLOW_TASKS = [
+    ("Create feature branch and push changes", "feature branch workflow",
+     ["Create new branch with git_branch", "Make code changes", "Stage and commit changes", "Push branch with git_push", "Create PR"]),
+    ("Merge feature branch to main", "branch merge",
+     ["Checkout main branch", "Pull latest changes", "Merge feature branch", "Resolve any conflicts", "Push merged changes"]),
+    ("Sync local repository with remote", "repo sync",
+     ["Check current branch", "Pull latest changes", "Handle any merge conflicts", "Verify sync complete"]),
+    ("Stash changes and switch branches", "branch switch",
+     ["Stash current changes", "Checkout target branch", "Pull latest", "Pop stash when returning"]),
+    ("Create hotfix and deploy", "hotfix workflow",
+     ["Create hotfix branch from main", "Apply fix", "Commit and push", "Create PR for review", "Merge to main and release branch"]),
+    ("Rebase feature branch on main", "branch rebase",
+     ["Checkout feature branch", "Pull latest main", "Rebase onto main", "Handle conflicts", "Force push rebased branch"]),
+    ("Clean up merged branches", "branch cleanup",
+     ["List all branches", "Identify merged branches", "Delete local merged branches", "Delete remote merged branches"]),
+    ("Set up branch protection workflow", "branch protection",
+     ["Create develop branch", "Set up PR workflow", "Configure review requirements", "Test protection rules"]),
+    ("Cherry-pick commits between branches", "cherry-pick workflow",
+     ["Identify commits to pick", "Checkout target branch", "Cherry-pick commits", "Push changes"]),
+    ("Undo last commit safely", "commit undo",
+     ["Check commit history", "Soft reset to previous commit", "Verify changes are staged", "Recommit if needed"]),
+    ("Squash commits before merge", "commit squash",
+     ["Identify commits to squash", "Interactive rebase (manual)", "Write combined commit message", "Push squashed branch"]),
+    ("Resolve merge conflict", "conflict resolution",
+     ["Pull latest changes", "Identify conflicting files", "Resolve conflicts manually", "Commit resolution", "Push merged changes"]),
+    ("Create release tag", "release tagging",
+     ["Update version number", "Commit version bump", "Create annotated tag", "Push tag to remote"]),
+    ("Roll back to previous version", "version rollback",
+     ["Checkout previous tag/commit", "Create rollback branch", "Test rollback", "Push and deploy"]),
+    ("Migrate repository changes", "repo migration",
+     ["Clone source repo", "Remove old remote", "Add new remote", "Push all branches and tags"]),
+]
+
+# Category 12: CI/CD Workflows (NEW - 15 templates)
+CI_CD_TASKS = [
+    ("Fix failing CI and verify", "CI fix workflow",
+     ["Check CI status", "Get CI logs", "Analyze failure cause", "Apply suggested fix", "Push and wait for CI"]),
+    ("Set up CI pipeline from scratch", "CI setup",
+     ["Create workflow file", "Add test job", "Add lint job", "Add build job", "Test pipeline"]),
+    ("Add new test stage to CI", "CI test stage",
+     ["Read current workflow", "Add test stage configuration", "Set up test environment", "Trigger workflow", "Verify tests run"]),
+    ("Optimize CI pipeline speed", "CI optimization",
+     ["Analyze CI duration", "Add caching", "Parallelize jobs", "Reduce dependencies", "Verify improvement"]),
+    ("Debug intermittent CI failure", "flaky CI fix",
+     ["Review recent CI runs", "Identify pattern in failures", "Add retry logic or fix root cause", "Monitor for stability"]),
+    ("Add deployment stage to CI", "CD setup",
+     ["Add deployment job", "Configure environment secrets", "Add deployment triggers", "Test deployment"]),
+    ("Create PR with all checks passing", "PR workflow",
+     ["Create feature branch", "Make changes", "Push branch", "Create PR", "Wait for CI", "Request review"]),
+    ("Monitor CI status and notify", "CI monitoring",
+     ["Set up CI status check", "Wait for CI completion", "Check result", "Notify on failure"]),
+    ("Roll back failed deployment", "deployment rollback",
+     ["Check CI status", "Identify failed deployment", "Trigger rollback workflow", "Verify rollback success"]),
+    ("Add code coverage to CI", "coverage CI",
+     ["Add coverage tool", "Configure coverage threshold", "Add coverage job to CI", "Fail on low coverage"]),
+    ("Set up matrix testing", "matrix testing",
+     ["Define test matrix", "Add matrix to workflow", "Test across versions", "Verify all pass"]),
+    ("Add security scanning to CI", "security scanning",
+     ["Add security scan job", "Configure scanning tool", "Set failure thresholds", "Review scan results"]),
+    ("Create staging deployment pipeline", "staging pipeline",
+     ["Add staging environment", "Configure staging deployment", "Add approval gates", "Test staging workflow"]),
+    ("Implement canary deployment", "canary deployment",
+     ["Set up canary configuration", "Add gradual rollout", "Monitor canary metrics", "Promote or rollback"]),
+    ("Set up CI artifacts storage", "CI artifacts",
+     ["Configure artifact upload", "Add artifact retention", "Download in dependent jobs", "Clean up old artifacts"]),
+]
+
+# Category 13: GitHub Integration (NEW - 10 templates)
+GITHUB_TASKS = [
+    ("Create PR for feature implementation", "PR creation",
+     ["Commit and push changes", "Create PR with description", "Add labels", "Request reviewers"]),
+    ("Review and approve pull request", "PR review",
+     ["List open PRs", "Review changes", "Add review comments", "Approve or request changes"]),
+    ("Track issues and link to code", "issue tracking",
+     ["List relevant issues", "Link commits to issues", "Update issue status", "Close when complete"]),
+    ("Create bug report issue", "bug issue",
+     ["Create issue with bug label", "Add reproduction steps", "Assign to developer", "Track progress"]),
+    ("Set up issue templates", "issue templates",
+     ["Create bug report template", "Create feature request template", "Add issue labels", "Test templates"]),
+    ("Manage PR review workflow", "review workflow",
+     ["Set required reviewers", "Add PR labels", "Handle review comments", "Merge when approved"]),
+    ("Close stale issues", "issue cleanup",
+     ["List old issues", "Check for activity", "Add stale label", "Close inactive issues"]),
+    ("Create release with notes", "release creation",
+     ["Generate changelog", "Create release draft", "Add release notes", "Publish release"]),
+    ("Link PR to project board", "project tracking",
+     ["Create project board", "Link PRs to cards", "Track progress", "Archive completed items"]),
+    ("Set up auto-merge for PRs", "auto-merge",
+     ["Enable auto-merge", "Configure merge conditions", "Set up branch protection", "Test auto-merge"]),
+]
+
+# Category 14: Testing Workflows (NEW - 10 templates)
+TESTING_WORKFLOW_TASKS = [
+    ("Run tests and fix failures", "test fix workflow",
+     ["Run tests", "Analyze failures", "Apply suggested fixes", "Re-run tests", "Verify all pass"]),
+    ("Add test coverage tracking", "coverage tracking",
+     ["Run tests with coverage", "Generate coverage report", "Identify uncovered code", "Add missing tests"]),
+    ("Debug flaky tests", "flaky test fix",
+     ["Identify flaky tests", "Run tests multiple times", "Analyze test output", "Fix timing or isolation issues"]),
+    ("Set up test parallelization", "parallel testing",
+     ["Identify independent tests", "Configure parallel runner", "Optimize test order", "Verify speed improvement"]),
+    ("Create integration test suite", "integration tests",
+     ["Identify integration points", "Create test fixtures", "Write integration tests", "Add to CI"]),
+    ("Mock external services in tests", "test mocking",
+     ["Identify external calls", "Create mock services", "Configure mock responses", "Update tests to use mocks"]),
+    ("Add regression test for bug fix", "regression test",
+     ["Reproduce the bug", "Write failing test", "Fix the bug", "Verify test passes"]),
+    ("Set up test data fixtures", "test fixtures",
+     ["Create fixture files", "Set up database seeds", "Configure fixture loading", "Clean up after tests"]),
+    ("Improve test execution time", "test optimization",
+     ["Profile test execution", "Identify slow tests", "Optimize or split slow tests", "Verify improvement"]),
+    ("Add snapshot testing", "snapshot tests",
+     ["Install snapshot library", "Create snapshot tests", "Generate initial snapshots", "Update on intentional changes"]),
+]
+
+# Category 15: Code Analysis (NEW - 10 templates)
+CODE_ANALYSIS_TASKS = [
+    ("Find and remove dead code", "dead code removal",
+     ["Run dead code check", "Review unused items", "Remove confirmed dead code", "Run tests to verify"]),
+    ("Analyze module dependencies", "dependency analysis",
+     ["Run import analysis", "Generate dependency graph", "Identify circular dependencies", "Refactor if needed"]),
+    ("Find all usages of function", "usage analysis",
+     ["Find references to function", "Review each usage", "Plan refactoring", "Update all usages"]),
+    ("Trace code path for debugging", "code tracing",
+     ["Find definition of function", "Find all callers", "Trace execution path", "Identify bug location"]),
+    ("Audit code for patterns", "pattern audit",
+     ["Define pattern to find", "Search codebase", "Review matches", "Apply corrections"]),
+    ("Generate code documentation", "code documentation",
+     ["Analyze code structure", "Extract function signatures", "Generate docstrings", "Create module docs"]),
+    ("Check for security patterns", "security audit",
+     ["Run security analysis", "Find vulnerable patterns", "Prioritize by severity", "Fix vulnerabilities"]),
+    ("Identify refactoring opportunities", "refactoring analysis",
+     ["Find code duplications", "Identify complex functions", "Analyze coupling", "Plan refactoring"]),
+    ("Map API endpoints", "API mapping",
+     ["Find all endpoint definitions", "Extract routes and methods", "Document parameters", "Generate API docs"]),
+    ("Analyze test coverage gaps", "coverage analysis",
+     ["Run coverage report", "Find uncovered code", "Prioritize critical paths", "Add missing tests"]),
+]
+
 # =============================================================================
 # MULTI-AGENT COORDINATION PATTERNS (NEW - 25K examples target)
 # =============================================================================
@@ -498,7 +644,12 @@ ALL_PLANNING_TASKS = (
     FRONTEND_TASKS +
     DEVOPS_TASKS +
     SECURITY_TASKS +
-    PERFORMANCE_TASKS
+    PERFORMANCE_TASKS +
+    GIT_WORKFLOW_TASKS +
+    CI_CD_TASKS +
+    GITHUB_TASKS +
+    TESTING_WORKFLOW_TASKS +
+    CODE_ANALYSIS_TASKS
 )
 
 # =============================================================================
@@ -806,16 +957,16 @@ def augment_task(task: str, topic: str, steps: List[str]) -> Tuple[str, str, Lis
     return new_task, topic, new_steps
 
 
-def generate_planning_dataset(num_examples: int = 500000) -> List[Dict[str, Any]]:
+def generate_planning_dataset(num_examples: int = 600000) -> List[Dict[str, Any]]:
     """Generate the full planning training dataset.
 
-    Dataset composition for 500K examples:
-    - Core task plans: ~200K (40%)
-    - Detailed reasoning: ~100K (20%)
-    - Clarification scenarios: ~50K (10%)
-    - Complex multi-file plans: ~100K (20%)
-    - Multi-agent coordination plans (NEW): ~25K (5%)
-    - Edge cases: ~25K (5%)
+    Dataset composition for 600K examples:
+    - Core task plans: ~240K (40%)
+    - Detailed reasoning: ~120K (20%)
+    - Clarification scenarios: ~60K (10%)
+    - Multi-agent coordination plans: ~30K (5%)
+    - Git/CI/GitHub workflows: ~90K (15%)
+    - Testing/Analysis workflows: ~60K (10%)
     """
 
     examples = []
@@ -883,8 +1034,9 @@ def generate_planning_dataset(num_examples: int = 500000) -> List[Dict[str, Any]
     for task, research, execute in sequential_scenarios:
         examples.append(generate_sequential_delegation_example(task, research, execute))
 
-    # Fill multi-agent examples to target
-    while len([e for e in examples if "agent_strategy" in e.get("output", "")]) < multi_agent_target:
+    # Fill multi-agent examples to target (track count to avoid O(n²) recalculation)
+    multi_agent_count = len([e for e in examples if "agent_strategy" in e.get("output", "")])
+    while multi_agent_count < multi_agent_target:
         if random.random() > 0.5:
             task, topic, steps, strategy = random.choice(ALL_MULTI_AGENT_TASKS)
             examples.append(generate_multi_agent_example(task, topic, steps, strategy))
@@ -894,6 +1046,7 @@ def generate_planning_dataset(num_examples: int = 500000) -> List[Dict[str, Any]
         else:
             task, research, execute = random.choice(sequential_scenarios)
             examples.append(generate_sequential_delegation_example(task, research, execute))
+        multi_agent_count += 1
 
     # Add clarification examples (10% = 50K)
     print("  Adding clarification examples...")
@@ -915,10 +1068,12 @@ def generate_planning_dataset(num_examples: int = 500000) -> List[Dict[str, Any]
         ("Add security measures", "What security requirements must be met?"),
     ]
 
-    clarification_target = num_examples // 10  # 10% = 50K
-    while len([e for e in examples if "ask_user" in e.get("output", "")]) < clarification_target:
+    clarification_target = num_examples // 10  # 10% = 60K
+    clarification_count = len([e for e in examples if "ask_user" in e.get("output", "")])
+    while clarification_count < clarification_target:
         task, question = random.choice(clarification_questions)
         examples.append(generate_clarification_example(task, question))
+        clarification_count += 1
 
     # Fill remaining with augmented core examples
     print("  Augmenting to reach target...")
@@ -1059,6 +1214,23 @@ SYSTEM """You are Ephraim's planning model (Ike-coder). You ONLY propose executi
 REQUIRED OUTPUT FORMAT (JSON):
 {"reasoning": "your analysis", "confidence": 0-100, "risk": "LOW|MEDIUM|HIGH", "action": "propose_plan", "plan": {"goal_understanding": "...", "execution_steps": ["step1", "step2", ...], "validation_plan": "...", "git_strategy": "...", "agent_strategy": {...}}}
 
+AVAILABLE TOOLS (61 total):
+File: read_file, write_file, apply_patch, delete_file, move_file, copy_file
+Directory: list_directory, create_directory, delete_directory
+Search: glob_search, grep_search
+Git (10): git_status, git_diff, git_add, git_commit, git_push, git_pull, git_branch, git_checkout, git_merge, git_stash
+CI (8): check_ci_status, get_ci_logs, check_ci_result, wait_for_ci, analyze_ci_failure, suggest_ci_fix, trigger_workflow, pr_status
+GitHub (6): gh_pr_create, gh_pr_list, gh_pr_review, gh_issue_create, gh_issue_list, gh_issue_comment
+Test (4): run_tests, analyze_test_failure, suggest_test_fix, coverage_report
+Analysis (4): find_references, find_definition, analyze_imports, dead_code_check
+Web: web_search, web_fetch
+MCP: mcp_connect, mcp_disconnect, mcp_list_tools, mcp_call, mcp_status
+Multimodal: read_image, read_pdf
+Notebook: notebook_read, notebook_edit
+Task: task_create, task_update, task_list, task_get
+Agent: spawn_agent, wait_agent, wait_all_agents, get_agent_status, cancel_agent, spawn_agents_parallel
+Other: run_command, ask_user, final_answer
+
 MULTI-AGENT COORDINATION:
 For complex tasks, include agent_strategy in your plan:
 - parallel_agents: ["agent1", "agent2"] - for independent work
@@ -1076,6 +1248,10 @@ RULES:
 - For multi-component tasks, spawn parallel agents
 - For research-then-act tasks, use sequential agents
 - Set confidence based on how well you understand the task
+- Use Git workflow tools (push, pull, branch) for version control
+- Use CI tools (wait_for_ci, analyze_ci_failure) for continuous integration
+- Use GitHub tools for PR and issue management
+- Use test tools for running and analyzing tests
 
 If uncertain (confidence < 60), use:
 {"reasoning": "Need clarification", "confidence": 40, "risk": "LOW", "action": "ask_user", "params": {"question": "Your question"}}"""
@@ -1096,14 +1272,15 @@ def main():
     print("="*60)
     print("IKE-CODER PLANNING MODEL FINE-TUNING")
     print("="*60)
-    print(f"\nGenerating 500,000 planning training examples...")
+    print(f"\nGenerating 600,000 planning training examples...")
     print("Base model: qwen2.5-coder:14b")
     print("Output: Ike-coder:14b")
     print("GPU: A100 (batch_size=4, effective_batch=16)")
+    print("Includes: Git, CI/CD, GitHub, Testing, Analysis workflows")
     print("="*60 + "\n")
 
     # Generate dataset
-    examples = generate_planning_dataset(500000)
+    examples = generate_planning_dataset(600000)
     save_dataset(examples, "planning_training.jsonl")
 
     # Train model
