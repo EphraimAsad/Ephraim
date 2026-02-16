@@ -60,7 +60,7 @@ ollama pull llava
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/ephraim.git
+git clone https://github.com/EphraimAsad/ephraim.git
 cd ephraim
 
 # Install
