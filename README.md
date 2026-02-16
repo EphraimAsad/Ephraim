@@ -530,4 +530,5 @@ MIT License - see [LICENSE](LICENSE) for details.
 - Inspired by Claude Code's capabilities, built for local use
 
 ## Creator 
-Zain Asad
+Zain Asad & Adam Akhter
+www.linkedin.com/in/zain-asad-1998eph
