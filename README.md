@@ -587,5 +587,8 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 - [Ollama](https://ollama.ai) - Local LLM inference
 - [Rich](https://github.com/Textualize/rich) - Terminal UI
+
+## Creators
+Zain Asad & Adam Akhter
 - [DuckDuckGo](https://duckduckgo.com) - Free web search
 - Inspired by Claude Code's capabilities, built for local use
