@@ -2,7 +2,7 @@
 
 **A Senior-Engineer Terminal Coding Agent - Local Claude Code Alternative**
 
-[![Version](https://img.shields.io/badge/version-0.4.0-blue.svg)](https://github.com/EphraimAsad/ephraim)
+[![Version](https://img.shields.io/badge/version-0.5.0-blue.svg)](https://github.com/EphraimAsad/ephraim)
 [![Python](https://img.shields.io/badge/python-3.10+-green.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Ollama](https://img.shields.io/badge/powered%20by-Ollama-orange.svg)](https://ollama.ai)
@@ -18,19 +18,26 @@ Ephraim is a **free, local, privacy-first** terminal coding agent that provides 
 | **Plan-First** | Proposes plans before making changes |
 | **Human Approval** | No code changes without your consent |
 | **Streaming Output** | Real-time token display as the LLM thinks |
-| **42 Built-in Tools** | File ops, search, git, web, MCP, multi-agent, and more |
+| **61 Built-in Tools** | File ops, search, git, CI/CD, GitHub, testing, analysis, web, MCP, multi-agent |
 | **MCP Integration** | Connect to external tool servers |
 | **Multimodal** | Analyze images and PDFs with vision models |
 | **Git & CI Aware** | Understands your repo and CI pipeline |
 | **Multi-Agent** | Spawn parallel sub-agents for complex tasks |
 | **Extensible** | Hooks, skills, commands, training scripts |
 
-## What's New in v0.4.0
+## What's New in v0.5.0
 
-- **Multi-Agent Coordination** - Spawn parallel agents (EXPLORE, PLAN, EXECUTE, RESEARCH) for complex tasks
-- **6 New Multi-Agent Tools** - `spawn_agent`, `wait_agent`, `wait_all_agents`, `get_agent_status`, `cancel_agent`, `spawn_agents_parallel`
-- **Training Scripts** - Fine-tune your own models with 500K examples (optional, any Ollama model works)
-- **42 Tools** - Now includes multi-agent coordination tools
+- **19 New Tools** - Complete Git, CI/CD, GitHub, Testing, and Analysis workflows
+- **Full Git Operations** - `git_push`, `git_pull`, `git_branch`, `git_checkout`, `git_merge`, `git_stash`
+- **CI/CD Intelligence** - `wait_for_ci`, `analyze_ci_failure`, `suggest_ci_fix`, `trigger_workflow`, `pr_status`
+- **GitHub Integration** - `gh_pr_create`, `gh_pr_list`, `gh_pr_review`, `gh_issue_create`, `gh_issue_list`, `gh_issue_comment`
+- **Smart Testing** - `run_tests`, `analyze_test_failure`, `suggest_test_fix`, `coverage_report`
+- **Code Analysis** - `find_references`, `find_definition`, `analyze_imports`, `dead_code_check`
+- **Training Scripts** - Fine-tune your own models with 600K examples (optional)
+- **61 Tools** - Production-ready toolset for complete developer workflows
+
+### Previous: v0.4.0
+- Multi-agent coordination, 6 multi-agent tools, 500K training examples
 
 ### Previous: v0.3.0
 - Streaming token display, MCP integration, multimodal support (images/PDFs), full workflow phases
@@ -60,7 +67,7 @@ ollama pull llava
 
 ```bash
 # Clone the repository
-git clone https://github.com/EphraimAsad/ephraim.git
+git clone https://github.com/yourusername/ephraim.git
 cd ephraim
 
 # Install
@@ -134,7 +141,7 @@ Result: Patched at line 12 (+5 lines)
 ...
 ```
 
-## Available Tools (42 Total)
+## Available Tools (61 Total)
 
 ### File Operations
 | Tool | Description |
@@ -164,20 +171,57 @@ Result: Patched at line 12 (+5 lines)
 |------|-------------|
 | `run_command` | Execute shell commands (streaming) |
 
-### Git
+### Git (10 tools)
 | Tool | Description |
 |------|-------------|
 | `git_status` | Repository status |
 | `git_diff` | View changes |
 | `git_add` | Stage files |
 | `git_commit` | Create commits |
+| `git_push` | Push to remote |
+| `git_pull` | Pull from remote |
+| `git_branch` | Create/list/delete branches |
+| `git_checkout` | Switch branches |
+| `git_merge` | Merge branches |
+| `git_stash` | Stash/pop changes |
 
-### CI/CD
+### CI/CD (8 tools)
 | Tool | Description |
 |------|-------------|
 | `check_ci_status` | Check pipeline status |
 | `get_ci_logs` | Fetch CI logs |
 | `check_ci_result` | Check specific run |
+| `wait_for_ci` | Wait for CI completion |
+| `analyze_ci_failure` | Analyze failure cause |
+| `suggest_ci_fix` | Get fix suggestions |
+| `trigger_workflow` | Trigger workflow manually |
+| `pr_status` | Check PR review/check status |
+
+### GitHub (6 tools) - NEW in v0.5.0
+| Tool | Description |
+|------|-------------|
+| `gh_pr_create` | Create pull request |
+| `gh_pr_list` | List pull requests |
+| `gh_pr_review` | Submit PR review |
+| `gh_issue_create` | Create issue |
+| `gh_issue_list` | List issues |
+| `gh_issue_comment` | Comment on issue/PR |
+
+### Testing (4 tools) - NEW in v0.5.0
+| Tool | Description |
+|------|-------------|
+| `run_tests` | Run tests with framework detection |
+| `analyze_test_failure` | Analyze and explain failures |
+| `suggest_test_fix` | Suggest fixes for failing tests |
+| `coverage_report` | Generate coverage summary |
+
+### Code Analysis (4 tools) - NEW in v0.5.0
+| Tool | Description |
+|------|-------------|
+| `find_references` | Find all usages of a symbol |
+| `find_definition` | Find where symbol is defined |
+| `analyze_imports` | Analyze dependencies |
+| `dead_code_check` | Find unused code |
 
 ### Web (Free, No API Keys)
 | Tool | Description |
@@ -214,7 +258,7 @@ Result: Patched at line 12 (+5 lines)
 | `task_list` | List all tasks |
 | `task_get` | Get task details |
 
-### Multi-Agent (NEW in v0.4.0)
+### Multi-Agent
 | Tool | Description |
 |------|-------------|
 | `spawn_agent` | Spawn a sub-agent for focused tasks |
@@ -438,14 +482,16 @@ Ephraim works with any Ollama model out of the box. For advanced users who want 
 
 ```bash
 # Training scripts included:
-ephFinetune_plan.py    # Planning model (500K examples)
-ephFinetune_exec.py    # Execution model (500K examples)
+ephFinetune_plan.py    # Planning model (600K examples)
+ephFinetune_exec.py    # Execution model (600K examples)
 ```
 
 **Features:**
-- 500,000 training examples per model
-- Multi-agent coordination patterns included
-- A100 GPU optimized (~10-12 hours total)
+- 600,000 training examples per model
+- All 61 tools fully covered
+- Git, CI/CD, GitHub, Testing, Analysis workflows
+- Multi-agent coordination patterns
+- A100 GPU optimized (~12-14 hours total)
 - Exports to GGUF for Ollama
 
 Run on Google Colab with A100 GPU. See training scripts for details.
@@ -464,6 +510,16 @@ pytest tests/ --cov=ephraim
 ```
 
 ## Changelog
+
+### v0.5.0
+- **19 new tools** - Git extended, CI/CD, GitHub, Testing, Analysis
+- **Complete Git operations** - push, pull, branch, checkout, merge, stash
+- **CI/CD intelligence** - wait_for_ci, analyze_ci_failure, suggest_ci_fix, trigger_workflow, pr_status
+- **GitHub integration** - gh_pr_create, gh_pr_list, gh_pr_review, gh_issue_create, gh_issue_list, gh_issue_comment
+- **Smart testing** - run_tests, analyze_test_failure, suggest_test_fix, coverage_report
+- **Code analysis** - find_references, find_definition, analyze_imports, dead_code_check
+- **Training scripts** - Updated to 600K examples with all new tools
+- **61 tools total** (up from 42)
 
 ### v0.4.0
 - **Multi-agent coordination system** - Spawn parallel agents (EXPLORE, PLAN, EXECUTE, RESEARCH)
@@ -513,6 +569,11 @@ pytest tests/ --cov=ephraim
 - [x] ~~Multi-file refactoring~~ (Inherently supported)
 - [x] ~~Multi-agent coordination~~ (Done in v0.4.0)
 - [x] ~~Custom model training~~ (Done in v0.4.0)
+- [x] ~~Full Git operations~~ (Done in v0.5.0)
+- [x] ~~CI/CD intelligence~~ (Done in v0.5.0)
+- [x] ~~GitHub integration~~ (Done in v0.5.0)
+- [x] ~~Smart testing tools~~ (Done in v0.5.0)
+- [x] ~~Code analysis tools~~ (Done in v0.5.0)
 - [ ] Web UI option
 - [ ] More CI systems (GitLab, Jenkins)
 - [ ] Model selection via Ephraim.md
@@ -528,10 +589,3 @@ MIT License - see [LICENSE](LICENSE) for details.
 - [Rich](https://github.com/Textualize/rich) - Terminal UI
 - [DuckDuckGo](https://duckduckgo.com) - Free web search
 - Inspired by Claude Code's capabilities, built for local use
-
-## Creator 
-Zain Asad & Adam Akhter
-
-## Feel free to contact at
-www.linkedin.com/in/zain-asad-1998eph
-www.linkedin.com/in/adam-akhter

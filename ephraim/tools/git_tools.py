@@ -424,3 +424,586 @@ def git_add(files: List[str], cwd: Optional[str] = None) -> Dict[str, Any]:
     tool = GitAddTool()
     result = tool(files=files, cwd=cwd)
     return result.data if result.success else {"error": result.error}
+
+
+@register_tool
+class GitPushTool(BaseTool):
+    """
+    Push commits to a remote repository.
+    """
+
+    name = "git_push"
+    description = "Push commits to remote repository"
+    category = ToolCategory.GIT
+
+    parameters = [
+        ToolParam(
+            name="remote",
+            type="string",
+            description="Remote name (default: origin)",
+            required=False,
+            default="origin",
+        ),
+        ToolParam(
+            name="branch",
+            type="string",
+            description="Branch to push (default: current branch)",
+            required=False,
+            default=None,
+        ),
+        ToolParam(
+            name="set_upstream",
+            type="bool",
+            description="Set upstream tracking (-u flag)",
+            required=False,
+            default=False,
+        ),
+        ToolParam(
+            name="cwd",
+            type="string",
+            description="Repository directory (optional)",
+            required=False,
+            default=None,
+        ),
+    ]
+
+    def execute(self, **params) -> ToolResult:
+        """Push to remote."""
+        remote = params.get("remote", "origin")
+        branch = params.get("branch")
+        set_upstream = params.get("set_upstream", False)
+        cwd = params.get("cwd")
+
+        # Get current branch if not specified
+        if not branch:
+            branch_result = run_git_command(['branch', '--show-current'], cwd)
+            if branch_result['returncode'] == 0:
+                branch = branch_result['stdout'].strip()
+            else:
+                return ToolResult.fail("Could not determine current branch")
+
+        # Build push command
+        args = ['push']
+        if set_upstream:
+            args.append('-u')
+        args.extend([remote, branch])
+
+        result = run_git_command(args, cwd, timeout=60)
+
+        if result['returncode'] != 0:
+            return ToolResult.fail(f"Git push failed: {result['stderr']}")
+
+        return ToolResult.ok(
+            data={
+                "remote": remote,
+                "branch": branch,
+                "set_upstream": set_upstream,
+            },
+            summary=f"Pushed {branch} to {remote}",
+        )
+
+
+@register_tool
+class GitPullTool(BaseTool):
+    """
+    Pull changes from a remote repository.
+    """
+
+    name = "git_pull"
+    description = "Pull changes from remote repository"
+    category = ToolCategory.GIT
+
+    parameters = [
+        ToolParam(
+            name="remote",
+            type="string",
+            description="Remote name (default: origin)",
+            required=False,
+            default="origin",
+        ),
+        ToolParam(
+            name="branch",
+            type="string",
+            description="Branch to pull (default: current branch)",
+            required=False,
+            default=None,
+        ),
+        ToolParam(
+            name="rebase",
+            type="bool",
+            description="Use rebase instead of merge",
+            required=False,
+            default=False,
+        ),
+        ToolParam(
+            name="cwd",
+            type="string",
+            description="Repository directory (optional)",
+            required=False,
+            default=None,
+        ),
+    ]
+
+    def execute(self, **params) -> ToolResult:
+        """Pull from remote."""
+        remote = params.get("remote", "origin")
+        branch = params.get("branch")
+        rebase = params.get("rebase", False)
+        cwd = params.get("cwd")
+
+        # Build pull command
+        args = ['pull']
+        if rebase:
+            args.append('--rebase')
+        args.append(remote)
+        if branch:
+            args.append(branch)
+
+        result = run_git_command(args, cwd, timeout=60)
+
+        if result['returncode'] != 0:
+            # Check for merge conflicts
+            if 'CONFLICT' in result['stdout'] or 'conflict' in result['stderr'].lower():
+                return ToolResult.fail(f"Pull resulted in merge conflicts: {result['stdout']}")
+            return ToolResult.fail(f"Git pull failed: {result['stderr']}")
+
+        # Parse output for updates
+        stdout = result['stdout']
+        files_changed = 0
+        insertions = 0
+        deletions = 0
+
+        stats_match = re.search(
+            r'(\d+) files? changed(?:, (\d+) insertions?\(\+\))?(?:, (\d+) deletions?\(-\))?',
+            stdout,
+        )
+        if stats_match:
+            files_changed = int(stats_match.group(1))
+            insertions = int(stats_match.group(2) or 0)
+            deletions = int(stats_match.group(3) or 0)
+
+        already_up_to_date = 'Already up to date' in stdout or 'Already up-to-date' in stdout
+
+        return ToolResult.ok(
+            data={
+                "remote": remote,
+                "branch": branch,
+                "files_changed": files_changed,
+                "insertions": insertions,
+                "deletions": deletions,
+                "already_up_to_date": already_up_to_date,
+            },
+            summary="Already up to date" if already_up_to_date else
+                    f"Pulled {files_changed} files (+{insertions}/-{deletions})",
+        )
+
+
+@register_tool
+class GitBranchTool(BaseTool):
+    """
+    Create, list, or delete branches.
+    """
+
+    name = "git_branch"
+    description = "Create, list, or delete git branches"
+    category = ToolCategory.GIT
+
+    parameters = [
+        ToolParam(
+            name="action",
+            type="string",
+            description="Action: 'list', 'create', 'delete'",
+            required=True,
+        ),
+        ToolParam(
+            name="name",
+            type="string",
+            description="Branch name (required for create/delete)",
+            required=False,
+            default=None,
+        ),
+        ToolParam(
+            name="force",
+            type="bool",
+            description="Force delete (-D flag)",
+            required=False,
+            default=False,
+        ),
+        ToolParam(
+            name="cwd",
+            type="string",
+            description="Repository directory (optional)",
+            required=False,
+            default=None,
+        ),
+    ]
+
+    def execute(self, **params) -> ToolResult:
+        """Manage branches."""
+        action = params["action"].lower()
+        name = params.get("name")
+        force = params.get("force", False)
+        cwd = params.get("cwd")
+
+        if action == "list":
+            # List all branches
+            result = run_git_command(['branch', '-a'], cwd)
+            if result['returncode'] != 0:
+                return ToolResult.fail(f"Git branch list failed: {result['stderr']}")
+
+            branches = []
+            current_branch = None
+            for line in result['stdout'].strip().split('\n'):
+                line = line.strip()
+                if line.startswith('* '):
+                    current_branch = line[2:]
+                    branches.append(current_branch)
+                elif line:
+                    branches.append(line)
+
+            return ToolResult.ok(
+                data={
+                    "branches": branches,
+                    "current": current_branch,
+                },
+                summary=f"{len(branches)} branches, current: {current_branch}",
+            )
+
+        elif action == "create":
+            if not name:
+                return ToolResult.fail("Branch name required for create")
+
+            result = run_git_command(['branch', name], cwd)
+            if result['returncode'] != 0:
+                return ToolResult.fail(f"Git branch create failed: {result['stderr']}")
+
+            return ToolResult.ok(
+                data={"created": name},
+                summary=f"Created branch: {name}",
+            )
+
+        elif action == "delete":
+            if not name:
+                return ToolResult.fail("Branch name required for delete")
+
+            flag = '-D' if force else '-d'
+            result = run_git_command(['branch', flag, name], cwd)
+            if result['returncode'] != 0:
+                return ToolResult.fail(f"Git branch delete failed: {result['stderr']}")
+
+            return ToolResult.ok(
+                data={"deleted": name, "force": force},
+                summary=f"Deleted branch: {name}",
+            )
+
+        else:
+            return ToolResult.fail(f"Unknown action: {action}. Use 'list', 'create', or 'delete'")
+
+
+@register_tool
+class GitCheckoutTool(BaseTool):
+    """
+    Switch branches or restore files.
+    """
+
+    name = "git_checkout"
+    description = "Switch branches or restore working tree files"
+    category = ToolCategory.GIT
+
+    parameters = [
+        ToolParam(
+            name="target",
+            type="string",
+            description="Branch name or file path to checkout",
+            required=True,
+        ),
+        ToolParam(
+            name="create_branch",
+            type="bool",
+            description="Create new branch (-b flag)",
+            required=False,
+            default=False,
+        ),
+        ToolParam(
+            name="cwd",
+            type="string",
+            description="Repository directory (optional)",
+            required=False,
+            default=None,
+        ),
+    ]
+
+    def execute(self, **params) -> ToolResult:
+        """Checkout branch or file."""
+        target = params["target"]
+        create_branch = params.get("create_branch", False)
+        cwd = params.get("cwd")
+
+        args = ['checkout']
+        if create_branch:
+            args.append('-b')
+        args.append(target)
+
+        result = run_git_command(args, cwd)
+
+        if result['returncode'] != 0:
+            return ToolResult.fail(f"Git checkout failed: {result['stderr']}")
+
+        action = "Created and switched to" if create_branch else "Switched to"
+        return ToolResult.ok(
+            data={
+                "target": target,
+                "created": create_branch,
+            },
+            summary=f"{action}: {target}",
+        )
+
+
+@register_tool
+class GitMergeTool(BaseTool):
+    """
+    Merge branches.
+    """
+
+    name = "git_merge"
+    description = "Merge a branch into the current branch"
+    category = ToolCategory.GIT
+
+    parameters = [
+        ToolParam(
+            name="branch",
+            type="string",
+            description="Branch to merge into current",
+            required=True,
+        ),
+        ToolParam(
+            name="no_ff",
+            type="bool",
+            description="Create merge commit even for fast-forward",
+            required=False,
+            default=False,
+        ),
+        ToolParam(
+            name="message",
+            type="string",
+            description="Custom merge commit message",
+            required=False,
+            default=None,
+        ),
+        ToolParam(
+            name="cwd",
+            type="string",
+            description="Repository directory (optional)",
+            required=False,
+            default=None,
+        ),
+    ]
+
+    def execute(self, **params) -> ToolResult:
+        """Merge branch."""
+        branch = params["branch"]
+        no_ff = params.get("no_ff", False)
+        message = params.get("message")
+        cwd = params.get("cwd")
+
+        args = ['merge']
+        if no_ff:
+            args.append('--no-ff')
+        if message:
+            args.extend(['-m', message])
+        args.append(branch)
+
+        result = run_git_command(args, cwd)
+
+        if result['returncode'] != 0:
+            # Check for merge conflicts
+            if 'CONFLICT' in result['stdout'] or 'conflict' in result['stderr'].lower():
+                return ToolResult.fail(
+                    f"Merge conflict detected. Resolve conflicts manually.\n{result['stdout']}"
+                )
+            return ToolResult.fail(f"Git merge failed: {result['stderr']}")
+
+        # Check if already up to date
+        if 'Already up to date' in result['stdout']:
+            return ToolResult.ok(
+                data={"branch": branch, "already_merged": True},
+                summary=f"Already up to date with {branch}",
+            )
+
+        # Parse merge result
+        fast_forward = 'Fast-forward' in result['stdout']
+
+        return ToolResult.ok(
+            data={
+                "branch": branch,
+                "fast_forward": fast_forward,
+                "no_ff": no_ff,
+            },
+            summary=f"Merged {branch}" + (" (fast-forward)" if fast_forward else ""),
+        )
+
+
+@register_tool
+class GitStashTool(BaseTool):
+    """
+    Stash changes temporarily.
+    """
+
+    name = "git_stash"
+    description = "Stash or restore uncommitted changes"
+    category = ToolCategory.GIT
+
+    parameters = [
+        ToolParam(
+            name="action",
+            type="string",
+            description="Action: 'push', 'pop', 'list', 'drop', 'apply'",
+            required=True,
+        ),
+        ToolParam(
+            name="message",
+            type="string",
+            description="Message for stash (for push action)",
+            required=False,
+            default=None,
+        ),
+        ToolParam(
+            name="index",
+            type="int",
+            description="Stash index (for pop/drop/apply, default: 0)",
+            required=False,
+            default=0,
+        ),
+        ToolParam(
+            name="cwd",
+            type="string",
+            description="Repository directory (optional)",
+            required=False,
+            default=None,
+        ),
+    ]
+
+    def execute(self, **params) -> ToolResult:
+        """Manage stash."""
+        action = params["action"].lower()
+        message = params.get("message")
+        index = params.get("index", 0)
+        cwd = params.get("cwd")
+
+        if action == "push":
+            args = ['stash', 'push']
+            if message:
+                args.extend(['-m', message])
+            result = run_git_command(args, cwd)
+
+            if result['returncode'] != 0:
+                return ToolResult.fail(f"Git stash push failed: {result['stderr']}")
+
+            if 'No local changes to save' in result['stdout']:
+                return ToolResult.ok(
+                    data={"action": "push", "saved": False},
+                    summary="No changes to stash",
+                )
+
+            return ToolResult.ok(
+                data={"action": "push", "message": message, "saved": True},
+                summary=f"Stashed changes" + (f": {message}" if message else ""),
+            )
+
+        elif action == "pop":
+            result = run_git_command(['stash', 'pop', f'stash@{{{index}}}'], cwd)
+
+            if result['returncode'] != 0:
+                if 'CONFLICT' in result['stdout']:
+                    return ToolResult.fail(f"Stash pop conflict: {result['stdout']}")
+                return ToolResult.fail(f"Git stash pop failed: {result['stderr']}")
+
+            return ToolResult.ok(
+                data={"action": "pop", "index": index},
+                summary=f"Popped stash@{{{index}}}",
+            )
+
+        elif action == "apply":
+            result = run_git_command(['stash', 'apply', f'stash@{{{index}}}'], cwd)
+
+            if result['returncode'] != 0:
+                return ToolResult.fail(f"Git stash apply failed: {result['stderr']}")
+
+            return ToolResult.ok(
+                data={"action": "apply", "index": index},
+                summary=f"Applied stash@{{{index}}}",
+            )
+
+        elif action == "list":
+            result = run_git_command(['stash', 'list'], cwd)
+
+            if result['returncode'] != 0:
+                return ToolResult.fail(f"Git stash list failed: {result['stderr']}")
+
+            stashes = []
+            for line in result['stdout'].strip().split('\n'):
+                if line:
+                    stashes.append(line)
+
+            return ToolResult.ok(
+                data={"action": "list", "stashes": stashes},
+                summary=f"{len(stashes)} stash(es)",
+            )
+
+        elif action == "drop":
+            result = run_git_command(['stash', 'drop', f'stash@{{{index}}}'], cwd)
+
+            if result['returncode'] != 0:
+                return ToolResult.fail(f"Git stash drop failed: {result['stderr']}")
+
+            return ToolResult.ok(
+                data={"action": "drop", "index": index},
+                summary=f"Dropped stash@{{{index}}}",
+            )
+
+        else:
+            return ToolResult.fail(f"Unknown action: {action}. Use 'push', 'pop', 'list', 'drop', or 'apply'")
+
+
+# Additional convenience functions
+
+def git_push(remote: str = "origin", branch: Optional[str] = None, cwd: Optional[str] = None) -> Dict[str, Any]:
+    """Push to remote."""
+    tool = GitPushTool()
+    result = tool(remote=remote, branch=branch, cwd=cwd)
+    return result.data if result.success else {"error": result.error}
+
+
+def git_pull(remote: str = "origin", branch: Optional[str] = None, cwd: Optional[str] = None) -> Dict[str, Any]:
+    """Pull from remote."""
+    tool = GitPullTool()
+    result = tool(remote=remote, branch=branch, cwd=cwd)
+    return result.data if result.success else {"error": result.error}
+
+
+def git_branch(action: str, name: Optional[str] = None, cwd: Optional[str] = None) -> Dict[str, Any]:
+    """Manage branches."""
+    tool = GitBranchTool()
+    result = tool(action=action, name=name, cwd=cwd)
+    return result.data if result.success else {"error": result.error}
+
+
+def git_checkout(target: str, create_branch: bool = False, cwd: Optional[str] = None) -> Dict[str, Any]:
+    """Checkout branch or file."""
+    tool = GitCheckoutTool()
+    result = tool(target=target, create_branch=create_branch, cwd=cwd)
+    return result.data if result.success else {"error": result.error}
+
+
+def git_merge(branch: str, cwd: Optional[str] = None) -> Dict[str, Any]:
+    """Merge branch."""
+    tool = GitMergeTool()
+    result = tool(branch=branch, cwd=cwd)
+    return result.data if result.success else {"error": result.error}
+
+
+def git_stash(action: str, message: Optional[str] = None, cwd: Optional[str] = None) -> Dict[str, Any]:
+    """Manage stash."""
+    tool = GitStashTool()
+    result = tool(action=action, message=message, cwd=cwd)
+    return result.data if result.success else {"error": result.error}
