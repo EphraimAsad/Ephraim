@@ -24,13 +24,22 @@ function handler(name:string,fn:(...args:any[])=>unknown) {
     catch(e) {const msg=e instanceof Error?e.message:"Request failed";return {ok:false,error:msg.slice(0,220)};}
   });
 }
-function searchEncryptionAvailable():boolean{
-  return safeStorage.isEncryptionAvailable() && !(process.platform==="linux" && safeStorage.getSelectedStorageBackend()==="basic_text");
+async function searchEncryptionAvailable():Promise<boolean>{
+  if(process.platform==="linux" && safeStorage.getSelectedStorageBackend()==="basic_text")return false;
+  return safeStorage.isAsyncEncryptionAvailable();
 }
-function getKey():string|null {
-  if(!searchEncryptionAvailable())return null;
+async function getKey():Promise<string|null> {
+  if(!await searchEncryptionAvailable())return null;
   const value=db.getSetting("tavily_encrypted");
-  try{return value?safeStorage.decryptString(Buffer.from(value,"base64")):null;}catch{return null;}
+  if(!value)return null;
+  try {
+    const result=await safeStorage.decryptStringAsync(Buffer.from(value,"base64"));
+    if(result.shouldReEncrypt) {
+      const updated=await safeStorage.encryptStringAsync(result.result);
+      db.setSetting("tavily_encrypted",updated.toString("base64"));
+    }
+    return result.result;
+  }catch{return null;}
 }
 async function importDoc(reference:string,visibility:"private"|"shared") {
   const u=requireAdmin();
@@ -150,7 +159,7 @@ function bindIPC(){
         const privateSource=sources.map((s,i)=>sourceLabel(s,i)+"\n"+s.excerpt).join("\n\n");
         let webText="";
         if(useWeb) {
-          const key=getKey();
+          const key=await getKey();
           if(!key)throw new Error("Web search is not configured");
           // Main-process consent cannot be bypassed by a renderer IPC call.
           const consent=await dialog.showMessageBox(window!,{
@@ -175,13 +184,14 @@ function bindIPC(){
       })),searchedWeb:useWeb};
     }finally{chatBusy=false;}
   });
-  handler("settings:status",()=>{requireAuth();return {hasWebKey:!!getKey(),secureStorage:searchEncryptionAvailable()};});
-  handler("settings:searchKey",(key:string)=>{
+  handler("settings:status",async()=>{requireAuth();return {hasWebKey:!!(await getKey()),secureStorage:await searchEncryptionAvailable()};});
+  handler("settings:searchKey",async(key:string)=>{
     requireAdmin();
     if(typeof key!=="string"||key.length>512)throw new Error("Invalid key");
     if(!key){db.setSetting("tavily_encrypted",null);return true;}
-    if(!searchEncryptionAvailable())throw new Error("Encrypted OS credential storage unavailable");
-    db.setSetting("tavily_encrypted",safeStorage.encryptString(key.trim()).toString("base64"));
+    if(!await searchEncryptionAvailable())throw new Error("Encrypted OS credential storage unavailable");
+    const encrypted=await safeStorage.encryptStringAsync(key.trim());
+    db.setSetting("tavily_encrypted",encrypted.toString("base64"));
     return true;
   });
 }
