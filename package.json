@@ -1,0 +1,46 @@
+{
+  "name": "ephraim-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Offline-first desktop AI knowledge assistant",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test tests/*.test.ts",
+    "security:check": "node scripts/security-check.mjs",
+    "pack:win": "npm run build && electron-builder --win nsis --x64"
+  },
+  "dependencies": {
+    "node-llama-cpp": "3.22.3",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "mammoth": "^1.11.0",
+    "pdf-parse": "^2.4.5",
+    "exceljs": "^4.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "electron": "^45.0.0",
+    "electron-builder": "^26.0.0",
+    "electron-vite": "^5.0.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0",
+    "vite": "^7.0.0"
+  },
+  "build": {
+    "appId": "io.github.ephraimasad.ephraim",
+    "productName": "Ephraim",
+    "directories": {"output": "release"},
+    "asar": true,
+    "asarUnpack": ["**/*.node", "**/node-llama-cpp/**/bins/**", "**/node-llama-cpp/**/build/**"],
+    "files": ["out/**", "node_modules/**", "package.json"],
+    "win": {"target": ["nsis"]},
+    "nsis": {"oneClick": false, "allowToChangeInstallationDirectory": true}
+  }
+}
