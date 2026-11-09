@@ -1,53 +1,198 @@
-import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, safeStorage, shell, session } from "electron";
 import { join, basename } from "node:path";
-import { existsSync } from "node:fs";
-import { createAccount, authenticate, setupNeeded, initStore, listModels, getModelPathForTest, getModelPath, importModel, markTested, enableModel, listDocuments, addDocument, retrieve, history, addMessage, setSearchKey, getSearchKey, hasSearchKey, type Person } from "./store";
-import { extractText } from "./documents";
-import { respond, testModel } from "./llm";
+import { mkdirSync, existsSync } from "node:fs";
+import { KnowledgeStore, type Person, type SourceChunk } from "./store";
+import { importGGUF, generate, testChat, testEmbedding, getEmbedding } from "./runtime";
+import { extractPages } from "./documents";
 import { tavilySearch } from "./search";
+import { hierarchicalSummary, isSummaryRequest } from "../core/knowledge";
 
-let user:Person|null=null;
+let db:KnowledgeStore;
+let active:Person|null=null;
 let window:BrowserWindow|null=null;
-function requireAuth(){if(!user)throw new Error("Please sign in.");return user;}
-function requireAdmin(){if(requireAuth().role!=="admin")throw new Error("Administrator permissions required.");}
-const validText=(s:unknown,max:number):s is string=>typeof s==="string" && s.length>0 && s.length<=max;
+let failedLogins=0;
+let lastFailed=0;
+let chatBusy=false;
 const validId=(n:unknown):n is number=>Number.isSafeInteger(n)&&Number(n)>0;
-function bind(name:string,handler:(...args:any[])=>unknown){
-  ipcMain.handle(name,async(_event,...args)=>{try{return {ok:true,data:await handler(...args)};}catch(error){return {ok:false,error:error instanceof Error?error.message:"Operation failed"};}});
-}
-function ipc(){
-  bind("auth:state",()=>({needsSetup:setupNeeded(),user}));
-  bind("auth:setup",(name:string,password:string)=>{if(!setupNeeded())throw new Error("Already configured");createAccount(name,password,"admin");user=authenticate(name,password);return user;});
-  bind("auth:login",(name:string,password:string)=>{if(!validText(name,40)||!validText(password,256))throw new Error("Invalid credentials");const found=authenticate(name,password);if(!found)throw new Error("Invalid credentials");user=found;return user;});
-  bind("auth:logout",()=>{user=null;return true;});
-  bind("users:create",(name:string,password:string,role:"admin"|"user")=>{requireAdmin();createAccount(name,password,role);return true;});
-  bind("models:list",()=>{requireAuth();return listModels();});
-  bind("models:import",async(name:string)=>{requireAdmin();if(!validText(name,80))throw new Error("Invalid model name");const choice=await dialog.showOpenDialog(window!,{properties:["openFile"],filters:[{name:"GGUF Models",extensions:["gguf"]}]});if(choice.canceled)return null;importModel(choice.filePaths[0],name);return listModels();});
-  bind("models:test",async(id:number)=>{requireAdmin();if(!validId(id))throw new Error("Invalid model id");await testModel(getModelPathForTest(id));markTested(id);return listModels();});
-  bind("models:enable",(id:number,enabled:boolean)=>{requireAdmin();if(!validId(id)||typeof enabled!=="boolean")throw new Error("Invalid request");enableModel(id,enabled);return listModels();});
-  bind("docs:list",()=>{requireAuth();return listDocuments();});
-  bind("docs:import",async()=>{requireAdmin();const choice=await dialog.showOpenDialog(window!,{properties:["openFile","multiSelections"],filters:[{name:"Documents",extensions:["txt","md","csv","json","pdf","docx","xlsx"]}]});if(choice.canceled)return null;for(const path of choice.filePaths){const text=await extractText(path);addDocument(basename(path),text);}return listDocuments();});
-  bind("chat:history",()=>{requireAuth();return history();});
-  bind("chat:ask",async(question:string,modelId:number,web:boolean)=>{requireAuth();if(!validText(question,4000)||!validId(modelId)||typeof web!=="boolean")throw new Error("Invalid question");const citations=retrieve(question);let webText="";if(web){const key=getSearchKey();if(!key)throw new Error("No search provider configured");webText=await tavilySearch(question,key);}
-    const context=citations.map((c,i)=>`[DOC ${i+1}] ${c.title} v${c.version}\n${c.excerpt}`).join("\n\n")+"\n"+webText;
-    const answer=await respond(getModelPath(modelId),question,context);
-    addMessage("user",question);addMessage("assistant",answer);
-    return {answer,citations:citations.map(c=>({id:c.id,title:c.title,version:c.version})),searchedWeb:web};
+const validText=(n:unknown,max:number):n is string=>typeof n==="string"&&n.trim().length>0&&n.length<=max;
+function requireAuth():Person{if(!active)throw new Error("Sign in required");return active;}
+function requireAdmin():Person{const u=requireAuth();if(u.role!=="admin")throw new Error("Administrator role required");return u;}
+function handler(name:string,fn:(...args:any[])=>unknown) {
+  ipcMain.handle(name,async(event,...args)=>{
+    if(!window || event.sender.id!==window.webContents.id)return {ok:false,error:"Invalid application window"};
+    try{return {ok:true,data:await fn(...args)};}
+    catch(e) {const msg=e instanceof Error?e.message:"Request failed";return {ok:false,error:msg.slice(0,220)};}
   });
-  bind("settings:status",()=>{requireAuth();return {hasWebKey:hasSearchKey()};});
-  bind("settings:searchKey",(key:string)=>{requireAdmin();if(typeof key!=="string"||key.length>512)throw new Error("Invalid key");setSearchKey(key);return {hasWebKey:hasSearchKey()};});
+}
+function searchEncryptionAvailable():boolean{
+  return safeStorage.isEncryptionAvailable() && !(process.platform==="linux" && safeStorage.getSelectedStorageBackend()==="basic_text");
+}
+function getKey():string|null {
+  if(!searchEncryptionAvailable())return null;
+  const value=db.getSetting("tavily_encrypted");
+  try{return value?safeStorage.decryptString(Buffer.from(value,"base64")):null;}catch{return null;}
+}
+async function importDoc(reference:string,visibility:"private"|"shared") {
+  const u=requireAdmin();
+  if(!validText(reference,100)||!["private","shared"].includes(visibility))throw new Error("Invalid document details");
+  const selected=await dialog.showOpenDialog(window!,{properties:["openFile","multiSelections"],filters:[{name:"Documents",extensions:["txt","md","csv","pdf","docx","xlsx"]}]});
+  if(selected.canceled)return [];
+  const ids:number[]=[];
+  for(const path of selected.filePaths) {
+    const pages=await extractPages(path);
+    ids.push(db.addDocument(u.id,basename(path),reference,visibility,pages,path));
+  }
+  return ids;
+}
+function sourceLabel(c:SourceChunk,index:number) {
+  return "[D"+(index+1)+"] "+c.reference+" v"+c.version+(c.page?" p."+c.page:"")+(c.section?" §"+c.section:"");
+}
+function bindIPC(){
+  handler("auth:state",()=>({needsSetup:db.setupNeeded(),user:active}));
+  handler("auth:setup",(name:string,pwd:string)=>{
+    if(!db.setupNeeded())throw new Error("Setup already complete");
+    active=db.createAccount(name,pwd,"admin");
+    return active;
+  });
+  handler("auth:login",(name:string,pwd:string)=>{
+    if(!validText(name,40)||!validText(pwd,256))throw new Error("Invalid username or password");
+    if(failedLogins>=5&&Date.now()-lastFailed<30_000)throw new Error("Too many attempts; try again shortly");
+    const person=db.authenticate(name,pwd);
+    if(!person){failedLogins++;lastFailed=Date.now();throw new Error("Invalid username or password");}
+    failedLogins=0;active=person;return person;
+  });
+  handler("auth:logout",()=>{active=null;return true;});
+  handler("users:create",(username:string,password:string,role:"user"|"admin")=>{
+    requireAdmin();if(role!=="user"&&role!=="admin")throw new Error("Invalid role");
+    return db.createAccount(username,password,role);
+  });
+  handler("models:list",()=>{requireAuth();return db.listModels();});
+  handler("models:import",async(name:string,kind:"chat"|"embedding")=>{
+    requireAdmin();
+    if(!validText(name,80)||!["chat","embedding"].includes(kind))throw new Error("Invalid model details");
+    const files=await dialog.showOpenDialog(window!,{filters:[{name:"GGUF",extensions:["gguf"]}],properties:["openFile"]});
+    if(files.canceled)return null;
+    const path=importGGUF(files.filePaths[0],join(app.getPath("userData"),"models"));
+    db.addModel(name,path,kind);
+    return db.listModels();
+  });
+  handler("models:test",async(id:number)=>{
+    requireAdmin();if(!validId(id))throw new Error("Invalid model");
+    const model=db.modelForTest(id);
+    if(model.kind==="embedding")await testEmbedding(model.path);
+    else await testChat(model.path);
+    db.markModelTested(id);
+    return db.listModels();
+  });
+  handler("models:enable",(id:number,enabled:boolean)=>{
+    requireAdmin();if(!validId(id)||typeof enabled!=="boolean")throw new Error("Invalid model settings");
+    db.enableModel(id,enabled);return db.listModels();
+  });
+  handler("docs:list",()=>db.listDocuments(requireAuth().id));
+  handler("docs:import",async(reference:string,visibility:"private"|"shared")=>importDoc(reference,visibility));
+  handler("docs:chunks",(id:number)=>{
+    const u=requireAuth();if(!validId(id))throw new Error("Invalid document");
+    return db.documentChunks(u.id,id).map(c=>({ordinal:c.ordinal,page:c.page,section:c.section,text:c.excerpt}));
+  });
+  handler("docs:open",async(id:number)=>{
+    const u=requireAuth();if(!validId(id))throw new Error("Invalid document");
+    const path=db.sourcePath(u.id,id);if(!path||!existsSync(path))throw new Error("Source file is no longer available at its imported location");
+    const err=await shell.openPath(path);
+    if(err)throw new Error("Could not open source document");
+    return true;
+  });
+  handler("docs:reindex",async()=>{
+    requireAdmin();
+    const model=db.enabledEmbedding();
+    if(!model)throw new Error("Enable a tested embedding GGUF first");
+    const queue=db.chunkEmbeddingsToIndex(model.id);
+    let count=0;
+    for(const item of queue){
+      const vector=await getEmbedding(model.path,item.text);
+      db.saveEmbedding(item.id,model.id,vector);count++;
+    }
+    return {indexed:count};
+  });
+  handler("conversations:list",()=>db.listConversations(requireAuth().id));
+  handler("conversations:create",(title:string)=>{
+    const u=requireAuth();
+    return db.createConversation(u.id,validText(title,120)?title:"New conversation");
+  });
+  handler("conversations:messages",(id:number)=>{
+    const u=requireAuth();return db.getMessages(u.id,id);
+  });
+  handler("chat:ask",async(question:string,modelId:number,conversationId:number,useWeb:boolean)=>{
+    const u=requireAuth();
+    if(!validText(question,4000)||!validId(modelId)||!validId(conversationId)||typeof useWeb!=="boolean")throw new Error("Invalid chat request");
+    // Before model or search activity, confirm caller owns the conversation.
+    const previous=db.getMessages(u.id,conversationId).slice(-8).map(m=>({role:m.role as "user"|"assistant",text:String(m.text)}));
+    if(chatBusy)throw new Error("A response is already being generated");
+    chatBusy=true;
+    try {
+      const modelPath=db.modelForUse(modelId,"chat");
+      const named=db.findDocument(u.id,question);
+      const summarizeNamed=!!named&&isSummaryRequest(question);
+      let sources:SourceChunk[]=[];
+      let response="";
+      if(summarizeNamed) {
+        sources=db.documentChunks(u.id,named!.id);
+        response=await hierarchicalSummary(sources.map((c,i)=>sourceLabel(c,i)+"\n"+c.excerpt),async(text,instruction)=>{
+          return generate(modelPath,instruction,text);
+        },6500);
+      } else {
+        let queryEmbedding:undefined|{modelId:number;vector:number[]};
+        const embeddingModel=db.enabledEmbedding();
+        if(embeddingModel){
+          try{queryEmbedding={modelId:embeddingModel.id,vector:await getEmbedding(embeddingModel.path,question)};}
+          catch {queryEmbedding=undefined;}
+        }
+        sources=db.retrieve(u.id,question,queryEmbedding);
+        const privateSource=sources.map((s,i)=>sourceLabel(s,i)+"\n"+s.excerpt).join("\n\n");
+        let webText="";
+        if(useWeb) {
+          const key=getKey();
+          if(!key)throw new Error("Web search is not configured");
+          // Only the literal user question is sent to Tavily, NEVER retrieved private source material.
+          webText=await tavilySearch(question,key);
+        }
+        response=await generate(modelPath,question,privateSource+"\n\n"+webText,previous);
+      }
+      // Store only after success, and only against the currently authenticated owner.
+      if(!active||active.id!==u.id)throw new Error("Session changed during generation");
+      db.addMessage(u.id,conversationId,"user",question);
+      db.addMessage(u.id,conversationId,"assistant",response);
+      return {answer:response,citations:sources.map((s,i)=>({
+        label:"D"+(i+1),documentId:s.documentId,chunkId:s.id,title:s.title,
+        reference:s.reference,version:s.version,page:s.page,section:s.section,excerpt:s.excerpt.slice(0,450)
+      })),searchedWeb:useWeb};
+    }finally{chatBusy=false;}
+  });
+  handler("settings:status",()=>{requireAuth();return {hasWebKey:!!getKey(),secureStorage:searchEncryptionAvailable()};});
+  handler("settings:searchKey",(key:string)=>{
+    requireAdmin();
+    if(typeof key!=="string"||key.length>512)throw new Error("Invalid key");
+    if(!key){db.setSetting("tavily_encrypted",null);return true;}
+    if(!searchEncryptionAvailable())throw new Error("Encrypted OS credential storage unavailable");
+    db.setSetting("tavily_encrypted",safeStorage.encryptString(key.trim()).toString("base64"));
+    return true;
+  });
 }
 app.whenReady().then(()=>{
-  initStore();ipc();
+  mkdirSync(app.getPath("userData"),{recursive:true,mode:0o700});
+  db=new KnowledgeStore(join(app.getPath("userData"),"ephraim.sqlite"));
+  // Existing keys from v0.1 remain encrypted in the previous 'tavily' setting.
+  // Do not transmit, re-encrypt, or log anything without explicit admin action.
+  bindIPC();
   window=new BrowserWindow({
-    width:1250,height:850,minWidth:850,minHeight:650,show:false,
-    webPreferences:{preload:join(__dirname,"../preload/index.js"),nodeIntegration:false,contextIsolation:true,sandbox:true,webSecurity:true}
+    width:1260,height:850,minWidth:920,minHeight:650,show:false,
+    webPreferences:{preload:join(__dirname,"../preload/index.js"),sandbox:true,contextIsolation:true,nodeIntegration:false,webSecurity:true}
   });
+  window.setMenuBarVisibility(false);
   window.webContents.setWindowOpenHandler(()=>({action:"deny"}));
-  window.webContents.on("will-navigate",e=>e.preventDefault());
-  window.webContents.session.setPermissionRequestHandler((_webContents,_permission,callback)=>callback(false));
+  window.webContents.on("will-navigate",event=>event.preventDefault());
+  window.webContents.session.setPermissionRequestHandler((_wc,_p,callback)=>callback(false));
   window.once("ready-to-show",()=>window?.show());
-  if(!app.isPackaged && process.env.ELECTRON_RENDERER_URL)window.loadURL(process.env.ELECTRON_RENDERER_URL);
-  else window.loadFile(join(__dirname,"../renderer/index.html"));
+  if(!app.isPackaged&&process.env.ELECTRON_RENDERER_URL)void window.loadURL(process.env.ELECTRON_RENDERER_URL);
+  else void window.loadFile(join(__dirname,"../renderer/index.html"));
 });
-app.on("window-all-closed",()=>{app.quit();});
+app.on("window-all-closed",()=>app.quit());

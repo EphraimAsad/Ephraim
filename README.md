@@ -1,30 +1,44 @@
-# Ephraim — Local AI Knowledge Assistant
+# Ephraim — Offline-first desktop AI assistant
 
-**Status: early development / security review required before deployment.**
+**Current branch:** Milestones 2–4 candidate (pre-release; do not deploy with confidential material).
 
-Ephraim is an offline-first Electron desktop application with local GGUF inference, administrator-managed models, private document search, optional Tavily web search, and source-aware answers. No Ollama, hosted AI API, or subscription is required for core chat.
+Ephraim is an Electron + React/TypeScript desktop RAG assistant. It runs imported GGUF chat models locally without Ollama, uses optional local embedding GGUFs, imports PDF/DOCX/XLSX/CSV/TXT/MD documents, retrieves indexed evidence, and offers opt-in external Tavily search.
 
-## Development
-- Node.js 22+, Windows recommended.
-- Run npm install, then npm run dev.
-- Run npm run security:check, npm test, npm run typecheck, npm run build.
-- Run npm run pack:win to build an unsigned Windows NSIS installer (Windows host).
-- On first launch, create the local administrator account.
-- As administrator, import a GGUF chat model from your computer; test it before enabling it.
-- Upload documents into the local library. Files, indexes and settings live in Electron's per-user application data folder, not in this repository.
-- Add an optional Tavily key in Settings. Web search is off by default, and sends only the exact question after the user consents.
+## Setup for developers
+Use Node.js 22+ and a Windows machine for Windows installer testing.
 
-## Privacy and limitations
-The desktop app has no telemetry and does not upload documents or prompts unless the user explicitly turns on web search; Tavily receives the text of the question, not private retrieved passages. A search API key is encrypted via Electron safeStorage; the app refuses weak Linux key storage. Never place real keys, model files, lab records or personal documents in source control.
+1. Run `npm install`.
+2. Run `npm test`, `npm run typecheck`, `npm run build`, and `npm run security:check`.
+3. Run `npm run dev` to start the desktop app.
+4. Create the first administrator with a 12+ character password.
+5. Import a GGUF, **Test** it using real local inference, then **Enable** it.
+6. Import a sample procedure with reference `TP 4122`, choose shared/private.
+7. Optionally import and enable a dedicated embedding GGUF, then choose **Build semantic index**.
+8. Ask to summarise `TP 4122`. The app attempts to summarise every indexed section, including long documents, and exposes retrieved source labels.
+9. Optional Tavily provider key is entered in Settings and stored via Electron OS-encrypted safeStorage. Internet search is off by default and asks before every request.
 
-Local files and the SQLite database are **not yet encrypted at rest**. Operating-system account security and disk encryption are recommended. The current implementation is an **early prototype**, not validated for regulated laboratory use. Model output is not authoritative; always verify citations and current controlled-document versions. PDF extraction does not reliably preserve page locations yet. PDF/DOCX/XLSX ingestion is not a hardened sandbox; only import trusted files during this phase.
+## Security and limitations
+- Every conversation is owned by one local user. Retrieval filters by document visibility and current approval state.
+- Imported documents are assigned to administrator ownership; shared documents are readable by local user accounts. Previous versions are retained as superseded and not normally retrieved.
+- A new inference context is created for each generation, preventing reuse of chat context across users.
+- No telemetry; no prompt or private source text is passed to an external provider unless the **literal question itself** contains it and the user consents to web search.
+- Imported GGUF files stay in the app data folder. We never commit tokens, models, document content, conversation exports or databases.
+- **Files and SQLite are currently plaintext at rest, not encrypted.** Use OS full-disk encryption; this release is not approved for regulated or confidential laboratory documents.
+- PDF page citations use per-page extraction; DOCX/TXT references may not have reliable page numbers. Scanned PDFs need OCR (not yet implemented).
+- Retrieval cites the passages given to the model; a cited passage is not proof a model's claim was correct.
+- Untrusted parser files and source content still require stronger isolation and threat-model review.
+- The Windows NSIS packaging includes an experimental native GGUF runtime setup. A successful CI compilation is **not** evidence of clean-machine installation, GPU support or successful real GGUF inference.
 
-The Windows installer and GGUF inference must be validated on a Windows machine before the first release. We do not claim these unverified builds are production-ready.
+## Commands
+- `npm test` — deterministic unit tests and privacy isolation tests
+- `npm run typecheck` — TypeScript check
+- `npm run build` — Electron bundling
+- `npm run pack:win` — unsigned Windows NSIS installer
+- `npm run security:check` — basic tracked-source secret pattern check (NOT historical)
+- Windows PR workflow — attempts installer packaging, checks artifact existence and uploads installer for internal testing
 
-## Architecture
-Electron main process: SQLite, local GGUF via node-llama-cpp, document ingestion, optional web API. Renderer: isolated React/TypeScript app with a typed allowlisted preload bridge. Browser sandbox + context isolation and no arbitrary browser navigation.
+## No-charge objective
+Core offline inference needs no paid API. GitHub Actions standard hosted runners are free for public repositories within platform rules. External Tavily search is optional and subject to its provider quotas. No API key is included in CI or source code.
 
-The original terminal coding agent was preserved on branch archive/terminal-agent-2026-11-09.
-
-## License
-MIT (see LICENSE). The dependencies and imported model weights may have their own terms.
+## Repository history
+Original terminal agent archived on `archive/terminal-agent-2026-11-09`; its git history remains visible and requires a separate secrets audit. The application is MIT; third-party model weights have independent licences.
