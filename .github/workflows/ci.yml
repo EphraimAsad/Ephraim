@@ -20,3 +20,19 @@ jobs:
       - run: npm test
       - run: npm run typecheck
       - run: npm run build
+
+  real-gguf-smoke:
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Download public tiny test GGUF
+        run: curl --fail --location --retry 3 --silent --show-error "https://huggingface.co/tensorblock/SmolLM2-135M-Instruct-GGUF/resolve/main/SmolLM2-135M-Instruct-Q2_K.gguf" -o /tmp/ephraim-test.gguf
+      - name: Run local inference without Ollama
+        run: node scripts/gguf-smoke.mjs /tmp/ephraim-test.gguf
