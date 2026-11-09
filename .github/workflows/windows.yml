@@ -1,0 +1,24 @@
+name: Windows packaging (manual)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: windows-2022
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm install --no-audit --no-fund
+      - run: npm run security:check
+      - run: npm test
+      - run: npm run typecheck
+      - run: npm run pack:win
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ephraim-windows-prototype
+          path: release/*.exe
+          retention-days: 1
