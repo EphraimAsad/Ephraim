@@ -29,7 +29,7 @@ function ipc(){
   bind("docs:import",async()=>{requireAdmin();const choice=await dialog.showOpenDialog(window!,{properties:["openFile","multiSelections"],filters:[{name:"Documents",extensions:["txt","md","csv","json","pdf","docx","xlsx"]}]});if(choice.canceled)return null;for(const path of choice.filePaths){const text=await extractText(path);addDocument(basename(path),text);}return listDocuments();});
   bind("chat:history",()=>{requireAuth();return history();});
   bind("chat:ask",async(question:string,modelId:number,web:boolean)=>{requireAuth();if(!validText(question,4000)||!validId(modelId)||typeof web!=="boolean")throw new Error("Invalid question");const citations=retrieve(question);let webText="";if(web){const key=getSearchKey();if(!key)throw new Error("No search provider configured");webText=await tavilySearch(question,key);}
-    const context=citations.map((c,i)=>\`[DOC \${i+1}] \${c.title} v\${c.version}\n\${c.excerpt}\`).join("\n\n")+"\n"+webText;
+    const context=citations.map((c,i)=>`[DOC ${i+1}] ${c.title} v${c.version}\n${c.excerpt}`).join("\n\n")+"\n"+webText;
     const answer=await respond(getModelPath(modelId),question,context);
     addMessage("user",question);addMessage("assistant",answer);
     return {answer,citations:citations.map(c=>({id:c.id,title:c.title,version:c.version})),searchedWeb:web};
