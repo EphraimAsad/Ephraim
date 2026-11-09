@@ -79,12 +79,12 @@ export function addDocument(name:string,content:string):void {
 }
 export interface Citation { id:number; title:string; version:number; excerpt:string }
 export function retrieve(query:string):Citation[] {
-  const exact=db.prepare("SELECT id,title,version,substr(content,1,17000) AS excerpt FROM docs WHERE lower(title) LIKE lower(?) ORDER BY version DESC LIMIT 1").all("%"+query.trim().replace(/[%_]/g,"")+"%") as Citation[];
+  const exact=db.prepare("SELECT id,title,version,substr(content,1,17000) AS excerpt FROM docs WHERE lower(title) LIKE lower(?) ORDER BY version DESC LIMIT 1").all("%"+query.trim().replace(/[%_]/g,"")+"%") as unknown as Citation[];
   if(exact.length) return exact;
   const tokens=Array.from(new Set((query.toLowerCase().match(/[\p{L}\p{N}]{3,}/gu)||[]))).slice(0,12);
   if(!tokens.length) return [];
   const fts=tokens.map(t=>'"'+t.replace(/"/g,"")+'"').join(" OR ");
-  return db.prepare("SELECT d.id,d.title,d.version,snippet(docs_fts,1,'','', ' … ',32) AS excerpt FROM docs_fts JOIN docs d ON d.id=docs_fts.rowid WHERE docs_fts MATCH ? ORDER BY bm25(docs_fts) LIMIT 5").all(fts) as Citation[];
+  return db.prepare("SELECT d.id,d.title,d.version,snippet(docs_fts,1,'','', ' … ',32) AS excerpt FROM docs_fts JOIN docs d ON d.id=docs_fts.rowid WHERE docs_fts MATCH ? ORDER BY bm25(docs_fts) LIMIT 5").all(fts) as unknown as Citation[];
 }
 export function history() {
   return db.prepare("SELECT id,role,text,created FROM messages ORDER BY id DESC LIMIT 60").all().reverse();
