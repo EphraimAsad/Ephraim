@@ -42,7 +42,7 @@ function App(){
    if(!question.trim()||!modelId||busy)return;
    const q=question.trim();setQuestion("");
    await act(async()=>{
-     if(web&&!window.confirm("Send this question to Tavily for external search?\n\n"+q.slice(0,260)))throw new Error("Web search not sent");
+
      const id=activeConv??await newConversation();
      const r=await call<{answer:string;citations:Citation[]}>("chat:ask",q,modelId,id,web);
      setMessages(await call<Msg[]>("conversations:messages",id));

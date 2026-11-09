@@ -152,6 +152,14 @@ function bindIPC(){
         if(useWeb) {
           const key=getKey();
           if(!key)throw new Error("Web search is not configured");
+          // Main-process consent cannot be bypassed by a renderer IPC call.
+          const consent=await dialog.showMessageBox(window!,{
+            type:"warning",title:"External internet search",
+            message:"Send this exact question to Tavily?",
+            detail:question,
+            buttons:["Send question","Cancel"],defaultId:1,cancelId:1,noLink:true
+          });
+          if(consent.response!==0)throw new Error("External search cancelled");
           // Only the literal user question is sent to Tavily, NEVER retrieved private source material.
           webText=await tavilySearch(question,key);
         }

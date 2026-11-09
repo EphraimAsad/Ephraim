@@ -15,3 +15,10 @@ test("messages are tied to owner conversation",()=>{
  assert.match(s,/db\.getMessages\(u\.id,conversationId\)/);
  assert.match(s,/db\.addMessage\(u\.id,conversationId/);
 });
+
+test("External search requires native main-process consent",()=>{
+ const main=readFileSync("src/main/index.ts","utf8");
+ assert.ok(main.includes("dialog.showMessageBox(window!"));
+ assert.ok(main.includes("if(consent.response!==0)"));
+ assert.ok(main.indexOf("if(consent.response!==0)")<main.indexOf("tavilySearch(question,key)"));
+});
