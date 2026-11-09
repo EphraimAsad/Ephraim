@@ -166,8 +166,8 @@ export class KnowledgeStore {
   findDocument(owner:number,question:string):Reference|null {
     return findNamedDocument(question,this.visibleReferences(owner));
   }
-  documentChunks(owner:number,documentId:number):SourceChunk[] {
-    if(!this.canReadDocument(owner,documentId))throw new Error("Document not available");
+  documentChunks(owner:number,documentId:number,includeSuperseded=false):SourceChunk[] {
+    if(!this.canReadDocument(owner,documentId,includeSuperseded))throw new Error("Document not available");
     return readRows(this.db,"SELECT c.id,c.doc_id AS documentId,d.title,d.reference,d.version,c.page,c.section,c.text AS excerpt,c.ordinal FROM v2_chunks c JOIN v2_documents d ON d.id=c.doc_id WHERE c.doc_id=? ORDER BY c.ordinal",documentId) as unknown as SourceChunk[];
   }
   sourcePath(owner:number,id:number):string|null {

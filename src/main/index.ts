@@ -92,7 +92,7 @@ function bindIPC(){
   handler("docs:import",async(reference:string,visibility:"private"|"shared")=>importDoc(reference,visibility));
   handler("docs:chunks",(id:number)=>{
     const u=requireAuth();if(!validId(id))throw new Error("Invalid document");
-    return db.documentChunks(u.id,id).map(c=>({ordinal:c.ordinal,page:c.page,section:c.section,text:c.excerpt}));
+    return db.documentChunks(u.id,id,true).map(c=>({ordinal:c.ordinal,page:c.page,section:c.section,text:c.excerpt}));
   });
   handler("docs:open",async(id:number)=>{
     const u=requireAuth();if(!validId(id))throw new Error("Invalid document");

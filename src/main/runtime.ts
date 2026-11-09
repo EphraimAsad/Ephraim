@@ -74,7 +74,8 @@ export async function getEmbedding(path:string,text:string):Promise<number[]> {
   embeddingBusy=true;
   try {
     const context=await embedding(path);
-    const result=await context.getEmbeddingFor(text.slice(0,1500));
+    if(text.length>5000)throw new Error("Embedding input exceeds the supported chunk limit");
+    const result=await context.getEmbeddingFor(text);
     const vector=Array.from(result.vector) as number[];
     if(vector.length<2||!vector.every(Number.isFinite))throw new Error("Embedding model generated an invalid vector");
     return vector;

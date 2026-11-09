@@ -38,6 +38,8 @@ test("document versioning supersedes old revisions; newer version is used",()=>{
  assert.equal(store.documentChunks(admin.id,current)[0].page,2);
  assert.equal(store.canReadDocument(bob.id,old),false);
  assert.equal(store.canReadDocument(bob.id,old,true),true);
+ assert.throws(()=>store.documentChunks(bob.id,old),/not available/);
+ assert.equal(store.documentChunks(bob.id,old,true).length,1);
  assert.ok(store.retrieve(bob.id,"reagent ABCD").every(c=>c.documentId!==old));
  store.close();
 });
