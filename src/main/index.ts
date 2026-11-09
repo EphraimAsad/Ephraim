@@ -177,7 +177,20 @@ function bindIPC(){
     return true;
   });
 }
-app.whenReady().then(()=>{
+app.whenReady().then(async()=>{
+  if(process.argv.includes("--ephraim-self-test")) {
+    try {
+      const localGGUF=process.env.EPHRAIM_TEST_GGUF;
+      if(!localGGUF)throw new Error("Test model unavailable");
+      await testChat(localGGUF);
+      console.log("Ephraim packaged local GGUF inference OK");
+      app.exit(0);
+    }catch{
+      console.error("Ephraim packaged local GGUF inference FAILED");
+      app.exit(1);
+    }
+    return;
+  }
   mkdirSync(app.getPath("userData"),{recursive:true,mode:0o700});
   db=new KnowledgeStore(join(app.getPath("userData"),"ephraim.sqlite"));
   // Existing keys from v0.1 remain encrypted in the previous 'tavily' setting.
