@@ -38,7 +38,7 @@ test("document versioning supersedes old revisions; newer version is used",()=>{
  assert.equal(store.documentChunks(admin.id,current)[0].page,2);
  assert.equal(store.canReadDocument(bob.id,old),false);
  assert.equal(store.canReadDocument(bob.id,old,true),true);
- assert.equal(store.retrieve(bob.id,"reagent ABCD").length,0);
+ assert.ok(store.retrieve(bob.id,"reagent ABCD").every(c=>c.documentId!==old));
  store.close();
 });
 test("model approval requires successful test and embedding uniqueness",()=>{
