@@ -1,7 +1,13 @@
 import { getLlama, LlamaChatSession } from "node-llama-cpp";
-import { openSync, readSync, closeSync, copyFileSync, mkdirSync, statSync, unlinkSync } from "node:fs";
+import { openSync, readSync, closeSync, copyFileSync, mkdirSync, statSync, unlinkSync, appendFileSync } from "node:fs";
 import { extname, join } from "node:path";
 import { randomBytes } from "node:crypto";
+function trace(phase:string):void {
+ const file=process.env.EPHRAIM_TEST_TRACE_FILE;
+ if(file&&process.argv.includes("--ephraim-self-test")) {
+   try { appendFileSync(file,phase+"\n",{encoding:"utf8"}); }catch{}
+ }
+}
 let chatPath:string|null=null;
 let chatModel:any=null;
 let embeddingPath:string|null=null;
@@ -26,8 +32,12 @@ export function importGGUF(source:string,dir:string):string {
 async function chat(path:string) {
   if(chatPath===path&&chatModel)return chatModel;
   if(chatModel){await chatModel.dispose();chatModel=null;chatPath=null;}
+  trace("before-getLlama");
   const llama=await getLlama({gpu:process.argv.includes("--ephraim-self-test")?false:"auto",build:"never"});
+  trace("after-getLlama");
+  trace("before-loadModel");
   const model=await llama.loadModel({modelPath:path});
+  trace("after-loadModel");
   chatModel=model;chatPath=path;
   return model;
 }
@@ -38,8 +48,12 @@ export async function generate(path:string,question:string,sourceText:string,pre
   generating=true;
   let context:any=null;
   try {
+    trace("before-chat");
     const model=await chat(path);
+    trace("after-chat");
+    trace("before-createContext");
     context=await model.createContext({contextSize:process.argv.includes("--ephraim-self-test")?1024:4096});
+    trace("after-createContext");
     const session=new LlamaChatSession({contextSequence:context.getSequence()});
     const memory=previous.slice(-6).map(m=>(m.role==="user"?"User":"Assistant")+": "+m.text.slice(0,600)).join("\n");
     const prompt=[
@@ -54,7 +68,9 @@ export async function generate(path:string,question:string,sourceText:string,pre
       ...(options.onChunk?{onTextChunk:(chunk:string)=>{if(!options.signal?.aborted)options.onChunk?.(chunk);}}:{}),
       ...(options.signal?{signal:options.signal}:{})
     };
+    trace("before-prompt");
     const answer=await session.prompt(prompt,promptOptions);
+    trace("after-prompt");
     if(!answer.trim())throw new Error("Model produced an empty answer");
     return answer;
   }finally{

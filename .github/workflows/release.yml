@@ -77,8 +77,10 @@ jobs:
         run: |
           npm install --no-audit --no-fund
           if ($LASTEXITCODE -ne 0) { throw 'Dependencies could not be installed' }
-          npm run pack:win
-          if ($LASTEXITCODE -ne 0) { throw 'Windows packaging failed' }
+          npm run build
+          if ($LASTEXITCODE -ne 0) { throw 'Electron build failed' }
+          npx electron-builder --win --x64 --dir
+          if ($LASTEXITCODE -ne 0) { throw 'Unpacked Windows build failed' }
       - name: Download public GGUF for packaged inference test
         shell: pwsh
         run: |
@@ -90,19 +92,26 @@ jobs:
         run: |
           $env:EPHRAIM_TEST_GGUF = Join-Path $env:RUNNER_TEMP 'ephraim-test.gguf'
           $env:EPHRAIM_TEST_MARKER_FILE = Join-Path $env:RUNNER_TEMP 'ephraim-selftest-pass.txt'
+          $env:EPHRAIM_TEST_TRACE_FILE = Join-Path $env:RUNNER_TEMP 'ephraim-selftest-trace.txt'
           $binary = Resolve-Path '.\release\win-unpacked\Ephraim.exe'
           $stdout = Join-Path $env:RUNNER_TEMP 'ephraim-test-out.txt'
           $stderr = Join-Path $env:RUNNER_TEMP 'ephraim-test-err.txt'
           $proc = Start-Process -FilePath $binary -ArgumentList '--ephraim-self-test' -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
-          if (-not $proc.WaitForExit(150000)) {
+          if (-not $proc.WaitForExit(90000)) {
             Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
-            throw 'Windows model inference exceeded the 150s safety timeout'
+            Get-Content $env:EPHRAIM_TEST_TRACE_FILE -ErrorAction SilentlyContinue
+            throw 'Windows model inference exceeded the 90s safety timeout'
           }
-          if ($proc.ExitCode -ne 0) { throw "Windows inference failed ($($proc.ExitCode))" }
+          if ($proc.ExitCode -ne 0) { Get-Content $env:EPHRAIM_TEST_TRACE_FILE -ErrorAction SilentlyContinue; throw "Windows inference failed ($($proc.ExitCode))" }
           if ((-not (Test-Path $env:EPHRAIM_TEST_MARKER_FILE)) -or ((Get-Content $env:EPHRAIM_TEST_MARKER_FILE -Raw).Trim() -ne 'PASS')) {
             throw 'Packaged GGUF inference result was not confirmed'
           }
           Write-Output 'Packaged Windows model inference verified.'
+      - name: Build unsigned installer after successful packaged inference
+        shell: pwsh
+        run: |
+          npx electron-builder --win nsis --x64
+          if ($LASTEXITCODE -ne 0) { throw 'NSIS installer packaging failed' }
       - name: Confirm release files and generate checksum
         shell: pwsh
         run: |
