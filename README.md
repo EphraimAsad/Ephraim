@@ -29,9 +29,9 @@ Ephraim retrieves relevant excerpts from approved local documents and presents s
 
 ### Example
 
-**You:** “Summarise TP XXXX, including the procedure, incubation requirements and precautions.”
+**You:** “Compare the approach in DOC-001 with alternative published methods, explaining the differences and referencing your sources.”
 
-**Ephraim:** Searches the approved version of TP XXXX, processes its indexed sections and produces a document-grounded summary with references to indexed passages. Exact wording depends on the model and document; all outputs require human review.
+**Ephraim:** Retrieves approved local document passages, optionally asks to search relevant public sources, and produces a comparison with clearly labelled evidence. Results depend on model capability and require human review.
 
 ## Features
 
@@ -43,8 +43,8 @@ Ephraim retrieves relevant excerpts from approved local documents and presents s
 | **Search** | SQLite full-text retrieval; optional local embedding GGUF for hybrid semantic retrieval |
 | **Evidence** | Document identifiers, versions and page references when available; open original files |
 | **Summaries** | Multi-stage whole-document summarisation of named procedures |
-| **Web research** | Optional Tavily search; separately labelled web sources; explicit confirmation before each query |
-| **Conversation management** | Account-scoped chat history with rename and delete |
+| **Web research** | Selective, context-aware Tavily queries; explicit approval of each exact public query and optional public-page extraction |
+| **Conversation management** | Account-scoped chat history, configurable 4K–32K context and rolling conversation summaries |
 | **Responsive chat** | Streaming responses, Stop control, token limits and model selection |
 | **Administration** | Local admin/user roles, model/document approval and safe deletion of Ephraim-managed GGUF copies |
 | **Personal settings** | Dark, light and system appearance; response length preferences |
@@ -78,7 +78,7 @@ Import a chat GGUF, select it, and ask a general question. Web search remains of
 
 Ephraim supports Tavily through a user-provided key. A local administrator configures this key in **Settings**, where it is encrypted using OS-backed credential encryption when available.
 
-**External search is off by default.** Each search requires a native confirmation dialog showing the **exact question** sent to Tavily. Ephraim does not intentionally send private retrieved passages, uploaded files or previous conversation history to the search provider. However, if you type private information into the question itself and approve transmission, that information will be sent.
+**External research is off by default.** Each proposed search requires a native confirmation dialog showing the **exact outgoing query**. Ephraim may rephrase the user's own recent questions to resolve follow-up references, but does not intentionally send indexed document passages, account chat history, or generated conversation summaries to the search provider. The provider may also retrieve selected public result pages. Always review each outgoing query carefully: user-entered sensitive details might still appear in it.
 
 The Tavily account and any applicable usage limits are managed independently of Ephraim. No paid service is required for local chat/RAG.
 
@@ -159,6 +159,14 @@ npm run pack:win         # create unsigned Windows installer on Windows
 
 GitHub Actions also performs an actual small public GGUF inference and embedding smoke test. Windows packaging runs separately and must pass before distributing a candidate.
 
+## Conversational research (v0.2 beta)
+
+- Ephraim selects ordinary chat, approved-local-document research, public research, combined comparison, or named-document summarisation based on the question and available capabilities.
+- Approved local material is scoped to the signed-in account; the latest approved document version is preferred. Results are deduplicated and ranked before inference.
+- Follow-up questions use recent turns and rolling summaries of older turns. The summary is local and may omit details; important answers still need the original evidence.
+- Approved public search queries are shown verbatim for opt-in consent and search results may be expanded with public page excerpts. Public research requires a configured provider and can be skipped at any time.
+- References show the original passages supplied to the model, not verified factual entailment. Invalid citation labels are flagged. The assistant is experimental and should not be relied upon for high-stakes decisions.
+
 ## Roadmap
 
 - [x] Local GGUF import and inference
@@ -200,6 +208,6 @@ Administrators can delete an imported model using **Models → Delete**. Ephraim
 
 Select **Agent tools (local document tools)** in Chat to let compatible GGUF chat models choose between four read-only local tools: `list_documents`, `search_documents`, `read_document` and `get_document_versions`. The local account and document-approval rules are still enforced by Ephraim, not delegated to the model.
 
-If you additionally configure Tavily and tick **Allow web tool**, the model may request `search_public_web`. Before any lookup, Ephraim asks for explicit confirmation showing the **original question verbatim**. Private retrieved documents, generated summaries and tool arguments are **never forwarded to Tavily**. Rejecting the dialog prevents the request.
+If you additionally configure Tavily and enable **Allow public research**, Ephraim's deterministic research planner may propose one or two public queries for questions requiring outside sources. Each outgoing query requires explicit native consent. Private retrieved passages and generated summaries are never forwarded as public search queries. Rejecting a query prevents that search. Native model-driven document tools are still available for supported GGUFs.
 
-Tool use is bounded (up to 5 calls, at most 1 web lookup), and the selected model must support function calling. Tool results are treated as untrusted evidence rather than commands. The app displays the tools used alongside citations and does not expose file-write, shell, code-execution or model-management capabilities to the model. Normal non-agent RAG remains available and enabled by default.
+Native agent tool use is bounded (up to 5 calls; document tools remain read-only). Combined public/local research uses a separate bounded application-level workflow so even GGUF models without function calling can receive both evidence types. Tool results are untrusted evidence rather than commands. The application shows the tools used, approved outgoing queries and citations. Neither mode exposes file-write, shell, code-execution or model-management capabilities to the model.
