@@ -2,24 +2,42 @@ import { readFileSync, statSync } from "node:fs";
 import { extname } from "node:path";
 import mammoth from "mammoth";
 import ExcelJS from "exceljs";
-export async function extractText(path:string):Promise<string> {
-  if(statSync(path).size>15_000_000) throw new Error("Files over 15 MB are not supported");
+import type { TextPage } from "../core/knowledge";
+const MAX_FILE = 15_000_000;
+export async function extractPages(path:string):Promise<TextPage[]> {
+  if(statSync(path).size>MAX_FILE)throw new Error("File exceeds 15 MB");
   const ext=extname(path).toLowerCase();
-  if([".txt",".md",".csv",".json"].includes(ext))return readFileSync(path,"utf8");
-  if(ext===".docx")return (await mammoth.extractRawText({path})).value;
+  if([".txt",".md",".csv"].includes(ext))return [{page:null,text:readFileSync(path,"utf8")}];
+  if(ext===".docx") {
+    const result=await mammoth.extractRawText({path});
+    return [{page:null,text:result.value}];
+  }
+  if(ext===".xlsx") {
+    const wb=new ExcelJS.Workbook();
+    await wb.xlsx.readFile(path);
+    const sections:TextPage[]=[];
+    wb.eachSheet(sheet=>{
+      const lines:string[]=[];
+      sheet.eachRow(row=>lines.push((row.values as any[]).slice(1).map(v=>typeof v==="object"?JSON.stringify(v):String(v??"")).join(" | ")));
+      sections.push({page:null,section:sheet.name,text:lines.join("\n")});
+    });
+    return sections;
+  }
   if(ext===".pdf") {
     const { PDFParse }=await import("pdf-parse");
     const parser=new PDFParse({data:new Uint8Array(readFileSync(path))});
-    try {return (await parser.getText()).text;} finally {await parser.destroy();}
+    try {
+      // Extract each page separately so citations correspond to source PDF pages.
+      const info=await parser.getInfo();
+      const total=info.total??0;
+      if(total>500)throw new Error("PDF exceeds 500 pages");
+      const pages:TextPage[]=[];
+      for(let p=1;p<=total;p++){
+        const result=await parser.getText({partial:[p],pageJoiner:""});
+        pages.push({page:p,text:result.text});
+      }
+      return pages;
+    }finally{await parser.destroy();}
   }
-  if(ext===".xlsx") {
-    const workbook=new ExcelJS.Workbook(); await workbook.xlsx.readFile(path);
-    const pieces:string[]=[];
-    workbook.eachSheet(sheet=>{
-      pieces.push("# "+sheet.name);
-      sheet.eachRow(row=>pieces.push(row.values?.toString()??""));
-    });
-    return pieces.join("\n");
-  }
-  throw new Error("Unsupported file format");
+  throw new Error("Unsupported document type");
 }

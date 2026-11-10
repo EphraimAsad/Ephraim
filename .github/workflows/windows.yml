@@ -1,24 +1,46 @@
-name: Windows packaging (manual)
+name: Windows installer verification
 on:
+  pull_request:
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
   package:
     runs-on: windows-2022
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
-      - run: npm install --no-audit --no-fund
-      - run: npm run security:check
-      - run: npm test
-      - run: npm run typecheck
-      - run: npm run pack:win
+          node-version: '22'
+      - name: Install
+        run: npm install --no-audit --no-fund
+      - name: Tests
+        run: npm test
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Build unsigned installer
+        run: npm run pack:win
+      - name: Download public tiny GGUF for packaged inference test
+        shell: pwsh
+        run: |
+          $ProgressPreference = 'SilentlyContinue'
+          Invoke-WebRequest -Uri 'https://huggingface.co/tensorblock/SmolLM2-135M-Instruct-GGUF/resolve/main/SmolLM2-135M-Instruct-Q2_K.gguf' -OutFile (Join-Path $env:RUNNER_TEMP 'ephraim-test.gguf')
+      - name: Run packaged Electron local GGUF inference smoke test
+        shell: pwsh
+        timeout-minutes: 8
+        run: |
+          $env:EPHRAIM_TEST_GGUF = Join-Path $env:RUNNER_TEMP 'ephraim-test.gguf'
+          $proc = Start-Process -FilePath '.\release\win-unpacked\Ephraim.exe' -ArgumentList '--ephraim-self-test' -Wait -PassThru -NoNewWindow
+          if ($proc.ExitCode -ne 0) { throw 'Packaged GGUF inference smoke test failed' }
+      - name: Verify installer exists
+        shell: pwsh
+        run: |
+          $packages = Get-ChildItem release -Filter '*.exe' -Recurse
+          if ($packages.Count -eq 0) { throw 'Windows installer missing' }
+          $packages | ForEach-Object { Get-FileHash -Algorithm SHA256 $_.FullName | Format-List }
       - uses: actions/upload-artifact@v4
         with:
-          name: ephraim-windows-prototype
+          name: ephraim-windows-unsigned-test
           path: release/*.exe
           retention-days: 1
