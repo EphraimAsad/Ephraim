@@ -1,31 +1,30 @@
-# Ephraim v0.1.0-beta.2
+# Ephraim v0.1.0-beta.3
 
-## Windows blank-window hotfix
+## Experimental agent tools
 
-**Beta 2 fixes a packaging defect that could leave Ephraim v0.1.0-beta.1 displaying an empty application window.**
+This is the next Windows beta of Ephraim, the offline-first desktop AI and document assistant.
 
-### Fixed
-- Electron's preload bridge is now bundled as sandbox-compatible CommonJS (`index.cjs`) and loaded from the correct packaged path.
-- Renderer JavaScript and CSS assets use file-relative paths in packaged Windows builds.
-- A visible startup message replaces the formerly empty screen if the renderer fails.
-- Privacy-conscious startup diagnostics for preload/renderer failures.
+### New in Beta 3
+- **Agent tools (opt-in):** compatible GGUF chat models can request `list_documents`, `search_documents`, `read_document` and `get_document_versions` to explore approved local documents.
+- **Optional web tool:** `search_public_web` requires web configuration, explicit opt-in and native confirmation showing the original question. Retrieved private passages are not forwarded to the provider.
+- **Bounded access:** Five tool calls maximum per response, one web lookup, and account-scoped document permissions enforced by Ephraim.
+- **Tool visibility:** Chat displays tools invoked, alongside document and web citations when available.
+- **Normal non-agent RAG is unchanged** and remains available; agent mode is disabled by default.
 
-### New release gates
-- Packaged React login interface must mount successfully in Windows CI.
-- A small public GGUF must load and generate a response inside the packaged Windows application.
-- Built renderer JS/CSS paths and the preload IPC bridge are verified before publishing.
-- Existing unit tests, type checking, real GGUF/embedding checks and Git-history secret scanning remain required.
+### Included from recent betas
+- Windows blank-window fix: sandbox-compatible CommonJS preload and relative renderer assets.
+- Administrator-only deletion of Ephraim-managed GGUF copies, without touching the originally imported source file.
+- More informative reasoning-model test errors.
+- Local GGUF chat/embeddings, indexed documents, source citations, streaming and local conversation management.
 
-### Getting started
-1. Download **Ephraim Setup 0.1.0-beta.2.exe** and verify its SHA-256 checksum using **SHA256SUMS.txt**.
-2. Close the old Ephraim app and run the Beta 2 installer.
-3. Launch Ephraim. It should display the sign-in / first-administrator setup screen.
-4. Import, test and enable a compatible GGUF model.
-5. Use only synthetic or non-confidential documents during beta testing.
+### Installation
+Download **Ephraim.Setup.0.1.0-beta.3.exe** and **SHA256SUMS.txt**. Verify the installer checksum, close any previous Ephraim window, then install. No GGUF model weights or credentials are bundled.
 
-### Privacy and limitations
-No credentials or GGUF weights are bundled. The application remains offline-first and does not require Ollama.
+### Verification and cautions
+GitHub CI checks unit tests, TypeScript, full Git-history secret detection, real chat/embedding GGUF inference, packaged Windows UI startup and native inference, plus installer construction.
 
-**Local SQLite data and imported documents are not encrypted at rest.** Do not use regulated, clinical, personal or confidential documents yet. The Windows installer is unsigned and may trigger SmartScreen. Models and GPU compatibility depend on local hardware; this remains beta software.
+**Native agent tool calling is experimental.** The actual ability of Atem and Satella GGUFs to invoke tools reliably still needs on-device validation. Model compatibility varies.
 
-For full instructions see [README](https://github.com/EphraimAsad/Ephraim#readme).
+**Do not use confidential, clinical or regulated documents yet:** local SQLite data is not encrypted at rest. The unsigned Windows installer may trigger SmartScreen.
+
+For details consult the [README](https://github.com/EphraimAsad/Ephraim#readme).

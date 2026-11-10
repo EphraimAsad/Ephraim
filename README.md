@@ -54,7 +54,7 @@ Ephraim retrieves relevant excerpts from approved local documents and presents s
 
 ## Installation
 
-**Windows beta update:** If Beta 1 opened to a blank window, install **v0.1.0-beta.2** from [Releases](https://github.com/EphraimAsad/Ephraim/releases). It corrects the sandboxed preload bridge and adds an actual packaged-UI startup test.
+**Windows beta update:** If Beta 1 opened to a blank window, install **v0.1.0-beta.3** from [Releases](https://github.com/EphraimAsad/Ephraim/releases). It corrects the sandboxed preload bridge and adds an actual packaged-UI startup test.
 
 
 ### Windows (recommended for beta)
