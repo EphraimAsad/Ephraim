@@ -17,6 +17,10 @@ async function call<T>(channel:string,...args:unknown[]):Promise<T>{
  return r.data as T;
 }
 function App(){
+ useEffect(()=>{
+   if(!window.ephraim || typeof window.ephraim.invoke!=="function")return;
+   void window.ephraim.invoke("diagnostic:uiReady").catch(()=>{});
+ },[]);
  const [user,setUser]=useState<User|null>(null),[setup,setSetup]=useState(false),[username,setUsername]=useState(""),[password,setPassword]=useState("");
  const [page,setPage]=useState<"chat"|"library"|"models"|"settings">("chat"),[error,setError]=useState(""),[busy,setBusy]=useState(false);
  const [models,setModels]=useState<Model[]>([]),[modelId,setModelId]=useState(0),[docs,setDocs]=useState<Doc[]>([]);

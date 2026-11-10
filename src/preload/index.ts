@@ -6,7 +6,7 @@ const channels=[
  "conversations:list","conversations:create","conversations:messages",
  "conversations:rename","conversations:delete","chat:ask","chat:cancel",
  "settings:status","settings:searchKey","settings:preferences","settings:preferences:update",
- "web:open"
+ "web:open","diagnostic:uiReady"
 ] as const;
 type Channel=typeof channels[number];
 interface ChunkEvent{requestId:string;conversationId:number;chunk:string}

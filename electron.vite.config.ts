@@ -6,5 +6,10 @@ export default defineConfig({
     build: { rollupOptions: { external: ["node-llama-cpp", "pdf-parse", "mammoth", "exceljs", "node:sqlite"] } }
   },
   preload: { plugins: [externalizeDepsPlugin()] },
-  renderer: { plugins: [react()] }
+  renderer: {
+    // The packaged renderer opens via file://. Root-relative asset URLs load
+    // from the filesystem root and leave the Electron window blank.
+    base: "./",
+    plugins: [react()]
+  }
 });
