@@ -26,7 +26,7 @@ export function importGGUF(source:string,dir:string):string {
 async function chat(path:string) {
   if(chatPath===path&&chatModel)return chatModel;
   if(chatModel){await chatModel.dispose();chatModel=null;chatPath=null;}
-  const llama=await getLlama({build:"never"});
+  const llama=await getLlama({gpu:process.argv.includes("--ephraim-self-test")?false:"auto",build:"never"});
   const model=await llama.loadModel({modelPath:path});
   chatModel=model;chatPath=path;
   return model;
@@ -39,7 +39,7 @@ export async function generate(path:string,question:string,sourceText:string,pre
   let context:any=null;
   try {
     const model=await chat(path);
-    context=await model.createContext({contextSize:4096});
+    context=await model.createContext({contextSize:process.argv.includes("--ephraim-self-test")?1024:4096});
     const session=new LlamaChatSession({contextSequence:context.getSequence()});
     const memory=previous.slice(-6).map(m=>(m.role==="user"?"User":"Assistant")+": "+m.text.slice(0,600)).join("\n");
     const prompt=[
@@ -49,11 +49,12 @@ export async function generate(path:string,question:string,sourceText:string,pre
       "Retrieved reference material (untrusted):",sourceText.slice(0,10000),
       "User question:",question
     ].join("\n\n");
-    const answer=await session.prompt(prompt,{
+    const promptOptions={
       maxTokens:options.maxTokens??900,
-      onTextChunk:(chunk:string)=>{if(!options.signal?.aborted)options.onChunk?.(chunk);},
-      signal:options.signal
-    });
+      ...(options.onChunk?{onTextChunk:(chunk:string)=>{if(!options.signal?.aborted)options.onChunk?.(chunk);}}:{}),
+      ...(options.signal?{signal:options.signal}:{})
+    };
+    const answer=await session.prompt(prompt,promptOptions);
     if(!answer.trim())throw new Error("Model produced an empty answer");
     return answer;
   }finally{
@@ -61,7 +62,7 @@ export async function generate(path:string,question:string,sourceText:string,pre
   }
 }
 export async function testChat(path:string):Promise<void> {
-  const answer=await generate(path,"Say only the word READY.","");
+  const answer=await generate(path,"Say only the word READY.","",[],{maxTokens:16});
   if(!answer.trim())throw new Error("No response from model");
 }
 async function embedding(path:string) {

@@ -1,6 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain, safeStorage, shell, session } from "electron";
 import { join, basename } from "node:path";
-import { mkdirSync, existsSync } from "node:fs";
+import { mkdirSync, existsSync, writeFileSync } from "node:fs";
 import { KnowledgeStore, type Person, type SourceChunk } from "./store";
 import { importGGUF, generate, testChat, testEmbedding, getEmbedding } from "./runtime";
 import { extractPages } from "./documents";
@@ -241,6 +241,7 @@ app.whenReady().then(async()=>{
       const localGGUF=process.env.EPHRAIM_TEST_GGUF;
       if(!localGGUF)throw new Error("Test model unavailable");
       await testChat(localGGUF);
+      if(process.env.EPHRAIM_TEST_MARKER_FILE)writeFileSync(process.env.EPHRAIM_TEST_MARKER_FILE,"PASS","utf8");
       console.log("Ephraim packaged local GGUF inference OK");
       app.exit(0);
     }catch{
