@@ -17,3 +17,12 @@ test("rendered UI test must prove React mounted, not just HTML loaded",()=>{
   assert.match(renderer,/diagnostic:uiReady/);
   assert.match(main,/EPHRAIM_UI_TEST_MARKER_FILE/);
 });
+
+test("sandboxed bridge references the bundled CommonJS preload",()=>{
+  const config=readFileSync("electron.vite.config.ts","utf8");
+  const main=readFileSync("src/main/index.ts","utf8");
+  assert.match(config,/format:\s*"cjs"/);
+  assert.match(config,/entryFileNames:\s*"index\.cjs"/);
+  assert.match(main,/preload\/index\.cjs/);
+  assert.match(main,/sandbox:true/);
+});
