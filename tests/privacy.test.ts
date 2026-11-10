@@ -4,7 +4,7 @@ import {readFileSync} from "node:fs";
 test("search is opt-in and only literal question is transmitted",()=>{
  const code=readFileSync("src/main/index.ts","utf8");
  assert.ok(code.includes("if(useWeb)"));
- assert.ok(code.includes("tavilySearch(question,key)"));
+ assert.ok(code.includes("tavilySearch(query,key)"));
  assert.ok(!code.includes("tavilySearch(privateSource"));
 });
 test("privileged changes require administrator role",()=>{
