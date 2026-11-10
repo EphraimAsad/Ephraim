@@ -38,6 +38,9 @@ jobs:
       - name: Run local inference without Ollama
         run: node scripts/gguf-smoke.mjs /tmp/ephraim-test.gguf
 
+      - name: Verify actual Ephraim chat Model Test path
+        run: npx tsx scripts/chat-test-smoke.ts /tmp/ephraim-test.gguf
+
       - name: Download public tiny embedding GGUF
         run: curl --fail --location --retry 3 --silent --show-error "https://huggingface.co/CompendiumLabs/bge-small-en-v1.5-gguf/resolve/main/bge-small-en-v1.5-q4_k_m.gguf" -o /tmp/ephraim-embed-test.gguf
       - name: Verify real GGUF embeddings
