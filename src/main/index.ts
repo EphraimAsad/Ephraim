@@ -1,6 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain, safeStorage, shell, session } from "electron";
 import { join, basename } from "node:path";
-import { mkdirSync, existsSync } from "node:fs";
+import { mkdirSync, existsSync, writeFileSync, appendFileSync } from "node:fs";
 import { KnowledgeStore, type Person, type SourceChunk } from "./store";
 import { importGGUF, generate, testChat, testEmbedding, getEmbedding } from "./runtime";
 import { extractPages } from "./documents";
@@ -8,6 +8,13 @@ import { tavilySearch } from "./search";
 import { formatWebResults, safeWebUrl, type WebResult } from "../core/research";
 import { hierarchicalSummary, isSummaryRequest } from "../core/knowledge";
 
+function smokeTrace(phase:string):void {
+  const trace=process.env.EPHRAIM_TEST_TRACE_FILE;
+  if(trace && process.argv.includes("--ephraim-self-test")) {
+    try { appendFileSync(trace,phase+"\n",{encoding:"utf8"}); }catch {}
+  }
+}
+smokeTrace("main-module-loaded");
 let db:KnowledgeStore;
 let active:Person|null=null;
 let window:BrowserWindow|null=null;
@@ -236,14 +243,20 @@ function bindIPC(){
   });
 }
 app.whenReady().then(async()=>{
+  smokeTrace("electron-ready");
   if(process.argv.includes("--ephraim-self-test")) {
+    smokeTrace("test-flag-recognised");
     try {
       const localGGUF=process.env.EPHRAIM_TEST_GGUF;
       if(!localGGUF)throw new Error("Test model unavailable");
+      smokeTrace("before-testChat");
       await testChat(localGGUF);
+      smokeTrace("testChat-finished");
+      if(process.env.EPHRAIM_TEST_MARKER_FILE)writeFileSync(process.env.EPHRAIM_TEST_MARKER_FILE,"PASS","utf8");
       console.log("Ephraim packaged local GGUF inference OK");
       app.exit(0);
     }catch{
+      smokeTrace("testChat-error");
       console.error("Ephraim packaged local GGUF inference FAILED");
       app.exit(1);
     }

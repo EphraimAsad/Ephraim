@@ -1,0 +1,133 @@
+name: Publish Ephraim Beta
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'RELEASE_NOTES.md'
+      - 'README.md'
+      - '.github/workflows/release.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ephraim-beta-release
+  cancel-in-progress: false
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install and validate
+        run: |
+          npm install --no-audit --no-fund
+          npm run security:check
+          npm test
+          npm run typecheck
+          npm run build
+      - name: Install Gitleaks
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 --silent --show-error 'https://github.com/gitleaks/gitleaks/releases/download/v8.24.3/gitleaks_8.24.3_linux_x64.tar.gz' -o /tmp/gitleaks.tar.gz
+          mkdir /tmp/gitleaks
+          tar -xzf /tmp/gitleaks.tar.gz -C /tmp/gitleaks gitleaks
+      - name: Check history for detected secrets
+        shell: bash
+        run: |
+          set +e
+          /tmp/gitleaks/gitleaks detect --source=. --redact --no-banner --log-opts="--all" --exit-code=2 > /tmp/ephraim-secret-scan.log 2>&1
+          status=$?
+          if [ "$status" -ne 0 ]; then
+            echo 'Security gate failed. Inspect findings privately.'
+            exit "$status"
+          fi
+          echo 'Gitleaks full-history check passed.'
+      - name: Test local GGUF inference and token streaming
+        shell: bash
+        run: |
+          curl --fail --location --retry 3 --silent --show-error 'https://huggingface.co/tensorblock/SmolLM2-135M-Instruct-GGUF/resolve/main/SmolLM2-135M-Instruct-Q2_K.gguf' -o /tmp/test.gguf
+          node scripts/gguf-smoke.mjs /tmp/test.gguf
+      - name: Test local GGUF embeddings
+        shell: bash
+        run: |
+          curl --fail --location --retry 3 --silent --show-error 'https://huggingface.co/CompendiumLabs/bge-small-en-v1.5-gguf/resolve/main/bge-small-en-v1.5-q4_k_m.gguf' -o /tmp/embed.gguf
+          node scripts/embedding-smoke.mjs /tmp/embed.gguf
+  publish-windows:
+    needs: verify
+    runs-on: windows-2022
+    timeout-minutes: 65
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      RELEASE_TAG: v0.1.0-beta.1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install and build Windows package
+        shell: pwsh
+        run: |
+          npm install --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { throw 'Dependencies could not be installed' }
+          npm run build
+          if ($LASTEXITCODE -ne 0) { throw 'Electron build failed' }
+          npx electron-builder --win --x64 --dir
+          if ($LASTEXITCODE -ne 0) { throw 'Unpacked Windows build failed' }
+      - name: Download public GGUF for packaged inference test
+        shell: pwsh
+        run: |
+          $ProgressPreference = 'SilentlyContinue'
+          Invoke-WebRequest -Uri 'https://huggingface.co/tensorblock/SmolLM2-135M-Instruct-GGUF/resolve/main/SmolLM2-135M-Instruct-Q2_K.gguf' -OutFile (Join-Path $env:RUNNER_TEMP 'ephraim-test.gguf')
+      - name: Smoke-test packaged Windows application
+        shell: pwsh
+        timeout-minutes: 5
+        run: |
+          $env:EPHRAIM_TEST_GGUF = Join-Path $env:RUNNER_TEMP 'ephraim-test.gguf'
+          $env:EPHRAIM_TEST_MARKER_FILE = Join-Path $env:RUNNER_TEMP 'ephraim-selftest-pass.txt'
+          $env:EPHRAIM_TEST_TRACE_FILE = Join-Path $env:RUNNER_TEMP 'ephraim-selftest-trace.txt'
+          $binary = Resolve-Path '.\release\win-unpacked\Ephraim.exe'
+          $stdout = Join-Path $env:RUNNER_TEMP 'ephraim-test-out.txt'
+          $stderr = Join-Path $env:RUNNER_TEMP 'ephraim-test-err.txt'
+          $proc = Start-Process -FilePath $binary -ArgumentList '--ephraim-self-test' -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+          if (-not $proc.WaitForExit(90000)) {
+            Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+            Get-Content $env:EPHRAIM_TEST_TRACE_FILE -ErrorAction SilentlyContinue
+            throw 'Windows model inference exceeded the 90s safety timeout'
+          }
+          if ($proc.ExitCode -ne 0) { Get-Content $env:EPHRAIM_TEST_TRACE_FILE -ErrorAction SilentlyContinue; throw "Windows inference failed ($($proc.ExitCode))" }
+          if ((-not (Test-Path $env:EPHRAIM_TEST_MARKER_FILE)) -or ((Get-Content $env:EPHRAIM_TEST_MARKER_FILE -Raw).Trim() -ne 'PASS')) {
+            throw 'Packaged GGUF inference result was not confirmed'
+          }
+          Write-Output 'Packaged Windows model inference verified.'
+      - name: Build unsigned installer after successful packaged inference
+        shell: pwsh
+        run: |
+          npx electron-builder --win nsis --x64
+          if ($LASTEXITCODE -ne 0) { throw 'NSIS installer packaging failed' }
+      - name: Confirm release files and generate checksum
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem -Path 'release' -Filter '*.exe' -File | Where-Object { $_.Name -notlike '*uninstaller*' } | Select-Object -First 1
+          if (-not $installer) { throw 'No Windows installer produced' }
+          $checksum = (Get-FileHash -Algorithm SHA256 $installer.FullName).Hash.ToLowerInvariant()
+          "$checksum  $($installer.Name)" | Set-Content 'release/SHA256SUMS.txt' -Encoding ascii
+          Write-Output "Windows package verified. SHA256: $checksum"
+      - name: Create first GitHub pre-release with Windows installer
+        shell: pwsh
+        run: |
+          $existing = gh release list --repo $env:GITHUB_REPOSITORY --limit 100 --json tagName | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) { throw 'Could not inspect existing releases' }
+          if ($existing | Where-Object { $_.tagName -eq $env:RELEASE_TAG }) {
+            throw 'Release tag already exists; refusing to overwrite immutable release assets.'
+          }
+          $installer = Get-ChildItem -Path 'release' -Filter '*.exe' -File | Where-Object { $_.Name -notlike '*uninstaller*' } | Select-Object -First 1
+          gh release create $env:RELEASE_TAG $installer.FullName 'release/SHA256SUMS.txt' --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title 'Ephraim v0.1.0 Beta 1' --notes-file RELEASE_NOTES.md --prerelease
+          if ($LASTEXITCODE -ne 0) { throw 'GitHub Release publishing failed' }
