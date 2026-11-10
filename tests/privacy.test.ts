@@ -9,7 +9,7 @@ test("search is opt-in and only literal question is transmitted",()=>{
 });
 test("privileged changes require administrator role",()=>{
  const code=readFileSync("src/main/index.ts","utf8");
- for(const method of ['models:import','models:test','models:enable','docs:reindex','settings:searchKey','users:create']){
+ for(const method of ['models:import','models:test','models:enable','models:delete','docs:reindex','settings:searchKey','users:create']){
    const index=code.indexOf('handler("'+method+'"');
    assert.ok(index>=0,method);
    assert.ok(code.slice(index,index+400).includes("requireAdmin()"),method);

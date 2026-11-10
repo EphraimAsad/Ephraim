@@ -2,7 +2,8 @@ import { app, BrowserWindow, dialog, ipcMain, safeStorage, shell, session } from
 import { join, basename } from "node:path";
 import { mkdirSync, existsSync, writeFileSync, appendFileSync } from "node:fs";
 import { KnowledgeStore, type Person, type SourceChunk } from "./store";
-import { importGGUF, generate, testChat, testEmbedding, getEmbedding } from "./runtime";
+import { importGGUF, generate, testChat, testEmbedding, getEmbedding, releaseModel } from "./runtime";
+import { quarantineManagedModel } from "./model-files";
 import { extractPages } from "./documents";
 import { tavilySearch } from "./search";
 import { formatWebResults, safeWebUrl, type WebResult } from "../core/research";
@@ -110,6 +111,22 @@ function bindIPC(){
   handler("models:enable",(id:number,enabled:boolean)=>{
     requireAdmin();if(!validId(id)||typeof enabled!=="boolean")throw new Error("Invalid model settings");
     db.enableModel(id,enabled);return db.listModels();
+  });
+  handler("models:delete",async(id:number)=>{
+    requireAdmin();
+    if(!validId(id))throw new Error("Invalid model");
+    if(chatBusy)throw new Error("Wait for active chat generation to finish");
+    const record=db.modelForTest(id);
+    await releaseModel(record.path);
+    const owned=quarantineManagedModel(record.path,join(app.getPath("userData"),"models"));
+    try {
+      db.deleteModel(id);
+    }catch(error){
+      owned.rollback();
+      throw error;
+    }
+    owned.commit();
+    return db.listModels();
   });
   handler("docs:list",()=>db.listDocuments(requireAuth().id));
   handler("docs:import",async(reference:string,visibility:"private"|"shared")=>importDoc(reference,visibility));
