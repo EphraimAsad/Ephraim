@@ -1,30 +1,22 @@
-# Ephraim v0.1.0-beta.3
+# Ephraim v0.2.0-beta.1
 
-## Experimental agent tools
+## Conversational research beta
 
-This is the next Windows beta of Ephraim, the offline-first desktop AI and document assistant.
+- **Multi-turn context:** Conversation history now uses a selectable 4K, 8K, 16K or 32K token window with local rolling summaries of older turns. Context window requirements vary by model and machine.
+- **Research routing:** Ordinary chat, approved local documents, public research, combined comparisons and full-document summaries are coordinated by the application. Combined local/web retrieval does not depend on a model's function-calling capabilities.
+- **Mixed evidence:** Deduplicated approved local passages and independently retrieved public results are ranked, labelled and provided to the model for synthesis.
+- **Consent-led external research:** Public search is disabled by default. Exact proposed queries are displayed for permission before each Tavily request. Approved public result URLs may be extracted by the provider for additional evidence.
+- **Traceability:** Chat displays research mode, approximate prompt usage, public queries, tools invoked, sources and warnings for unrecognised citation labels.
+- **Generic examples:** Public help text and release documentation use synthetic document references rather than any organisation-specific laboratory procedures.
 
-### New in Beta 3
-- **Agent tools (opt-in):** compatible GGUF chat models can request `list_documents`, `search_documents`, `read_document` and `get_document_versions` to explore approved local documents.
-- **Optional web tool:** `search_public_web` requires web configuration, explicit opt-in and native confirmation showing the original question. Retrieved private passages are not forwarded to the provider.
-- **Bounded access:** Five tool calls maximum per response, one web lookup, and account-scoped document permissions enforced by Ephraim.
-- **Tool visibility:** Chat displays tools invoked, alongside document and web citations when available.
-- **Normal non-agent RAG is unchanged** and remains available; agent mode is disabled by default.
+## Install
 
-### Included from recent betas
-- Windows blank-window fix: sandbox-compatible CommonJS preload and relative renderer assets.
-- Administrator-only deletion of Ephraim-managed GGUF copies, without touching the originally imported source file.
-- More informative reasoning-model test errors.
-- Local GGUF chat/embeddings, indexed documents, source citations, streaming and local conversation management.
+Download the unsigned Windows installer for this pre-release and compare it against `SHA256SUMS.txt`. Exit an older Ephraim instance before upgrading. GGUF weights and API keys are not distributed.
 
-### Installation
-Download **Ephraim.Setup.0.1.0-beta.3.exe** and **SHA256SUMS.txt**. Verify the installer checksum, close any previous Ephraim window, then install. No GGUF model weights or credentials are bundled.
+## Security and limitations
 
-### Verification and cautions
-GitHub CI checks unit tests, TypeScript, full Git-history secret detection, real chat/embedding GGUF inference, packaged Windows UI startup and native inference, plus installer construction.
+Ephraim still stores local documents, chat history, summary memory and its SQLite database without application-level encryption at rest. Use operating-system full-disk encryption. **Do not use confidential, clinical or regulated materials until the security and workflow validation has been completed.**
 
-**Native agent tool calling is experimental.** The actual ability of Atem and Satella GGUFs to invoke tools reliably still needs on-device validation. Model compatibility varies.
+Citation labels refer to passages provided for generation. They do not establish that a statement is entailed by a reference. Small local models can misinterpret evidence, hallucinate, exceed token budgets or fail to use tool calling. External research is optional and needs a configured Tavily account; some sites cannot be extracted. Important comparisons should be checked against source documents.
 
-**Do not use confidential, clinical or regulated documents yet:** local SQLite data is not encrypted at rest. The unsigned Windows installer may trigger SmartScreen.
-
-For details consult the [README](https://github.com/EphraimAsad/Ephraim#readme).
+This is beta software, not a validated laboratory decision-support tool.
