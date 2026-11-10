@@ -31,7 +31,7 @@ Ephraim retrieves relevant excerpts from approved local documents and presents s
 
 **You:** “Summarise TP XXXX, including the procedure, incubation requirements and precautions.”
 
-**Ephraim:** Searches the approved version of TP 4122, processes its indexed sections and produces a document-grounded summary with references to indexed passages. Exact wording depends on the model and document; all outputs require human review.
+**Ephraim:** Searches the approved version of TP XXXX, processes its indexed sections and produces a document-grounded summary with references to indexed passages. Exact wording depends on the model and document; all outputs require human review.
 
 ## Features
 
