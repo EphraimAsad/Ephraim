@@ -14,3 +14,11 @@ for (const asset of assets) {
   if (!existsSync(join(output, asset))) throw Error("Referenced renderer bundle is missing");
 }
 console.log("Renderer file:// asset paths verified: " + assets.length + " local assets");
+
+const preload = resolve("out/preload/index.cjs");
+if (!existsSync(preload)) throw Error("Sandbox-compatible CommonJS preload bundle missing");
+const bridge = readFileSync(preload, "utf8");
+if (!bridge.includes("contextBridge") || !bridge.includes("ipcRenderer")) {
+  throw Error("Preload IPC bridge missing from bundle");
+}
+console.log("Sandboxed CommonJS preload bridge verified");
