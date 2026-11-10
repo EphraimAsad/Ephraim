@@ -9,7 +9,7 @@
 [Releases](https://github.com/EphraimAsad/Ephraim/releases) · [Installation](#installation) · [Features](#features) · [Privacy](#privacy--security) · [Development](#development)
 
 ![License](https://img.shields.io/badge/license-MIT-blue)
-![Status](https://img.shields.io/badge/status-beta%20candidate-orange)
+![Status](https://img.shields.io/badge/status-beta-orange)
 ![Platform](https://img.shields.io/badge/platform-Windows%20x64-0078D6)
 ![Inference](https://img.shields.io/badge/AI-local%20GGUF-5955AD)
 ![Cost](https://img.shields.io/badge/mandatory%20API%20cost-%C2%A30-brightgreen)
@@ -53,6 +53,9 @@ Ephraim retrieves relevant excerpts from approved local documents and presents s
 **Important:** GGUF compatibility and performance depend on the model's architecture and the user's hardware. No models or private datasets are included with the installer.
 
 ## Installation
+
+**Windows beta update:** If Beta 1 opened to a blank window, install **v0.1.0-beta.2** from [Releases](https://github.com/EphraimAsad/Ephraim/releases). It corrects the sandboxed preload bridge and adds an actual packaged-UI startup test.
+
 
 ### Windows (recommended for beta)
 

@@ -30,6 +30,7 @@ jobs:
           npm test
           npm run typecheck
           npm run build
+          npm run verify:renderer
       - name: Install Gitleaks
         shell: bash
         run: |
@@ -66,7 +67,7 @@ jobs:
       contents: write
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      RELEASE_TAG: v0.1.0-beta.1
+      RELEASE_TAG: v0.1.0-beta.2
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -79,8 +80,26 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Dependencies could not be installed' }
           npm run build
           if ($LASTEXITCODE -ne 0) { throw 'Electron build failed' }
+          npm run verify:renderer
+          if ($LASTEXITCODE -ne 0) { throw 'Renderer asset/preload verification failed' }
           npx electron-builder --win --x64 --dir
           if ($LASTEXITCODE -ne 0) { throw 'Unpacked Windows build failed' }
+      - name: Verify packaged React login UI can mount
+        shell: pwsh
+        timeout-minutes: 3
+        run: |
+          $env:EPHRAIM_UI_TEST_MARKER_FILE = Join-Path $env:RUNNER_TEMP 'ephraim-release-ui-pass.txt'
+          $binary = Resolve-Path '.\\release\\win-unpacked\\Ephraim.exe'
+          $proc = Start-Process -FilePath $binary -ArgumentList '--ephraim-ui-self-test' -PassThru
+          if (-not $proc.WaitForExit(60000)) {
+            Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+            throw 'Packaged React UI did not mount'
+          }
+          if ($proc.ExitCode -ne 0) { throw "Ephraim renderer exited ($($proc.ExitCode))" }
+          if ((-not (Test-Path $env:EPHRAIM_UI_TEST_MARKER_FILE)) -or ((Get-Content $env:EPHRAIM_UI_TEST_MARKER_FILE -Raw).Trim() -ne 'PASS')) {
+            throw 'Ephraim React UI not ready'
+          }
+          Write-Output 'Ephraim packaged React UI passed.'
       - name: Download public GGUF for packaged inference test
         shell: pwsh
         run: |
@@ -129,5 +148,5 @@ jobs:
             throw 'Release tag already exists; refusing to overwrite immutable release assets.'
           }
           $installer = Get-ChildItem -Path 'release' -Filter '*.exe' -File | Where-Object { $_.Name -notlike '*uninstaller*' } | Select-Object -First 1
-          gh release create $env:RELEASE_TAG $installer.FullName 'release/SHA256SUMS.txt' --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title 'Ephraim v0.1.0 Beta 1' --notes-file RELEASE_NOTES.md --prerelease
+          gh release create $env:RELEASE_TAG $installer.FullName 'release/SHA256SUMS.txt' --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title 'Ephraim v0.1.0 Beta 2' --notes-file RELEASE_NOTES.md --prerelease
           if ($LASTEXITCODE -ne 0) { throw 'GitHub Release publishing failed' }
