@@ -27,6 +27,7 @@ function App(){
  const [account,setAccount]=useState(""),[accountPassword,setAccountPassword]=useState("");
  const [citations,setCitations]=useState<Citation[]>([]),[webSources,setWebSources]=useState<WebSource[]>([]),[live,setLive]=useState(""),[theme,setTheme]=useState<"dark"|"light"|"system">("dark"),[maxTokens,setMaxTokens]=useState(900);
  const pending=useRef<string|null>(null);
+ const pendingConversation=useRef<number|null>(null);
  const [preview,setPreview]=useState<{name:string;chunks:{page:number|null;section:string|null;text:string}[]}|null>(null);
  async function refresh(){
    const [ms,ds,cs,st,prefs]=await Promise.all([
@@ -40,7 +41,7 @@ function App(){
  useEffect(()=>{if(user)void refresh().catch(e=>setError(String(e)));},[user]);
  useEffect(()=>{
    const off=window.ephraim.onChunk(event=>{
-     if(pending.current===event.requestId)setLive(old=>old+event.chunk);
+     if(pending.current===event.requestId && pendingConversation.current===event.conversationId)setLive(old=>old+event.chunk);
    });
    return off;
  },[]);
@@ -49,29 +50,31 @@ function App(){
    document.documentElement.classList.toggle("theme-dark",theme==="dark");
  },[theme]);
  async function signIn(){await act(async()=>{const u=await call<User>(setup?"auth:setup":"auth:login",username,password);setUser(u);setPassword("");});}
- async function openConversation(id:number){await act(async()=>{setActiveConv(id);setMessages(await call<Msg[]>("conversations:messages",id));setCitations([]);setWebSources([]);setLive("");});}
- async function newConversation():Promise<number>{const id=await call<number>("conversations:create","New conversation");setActiveConv(id);setMessages([]);setCitations([]);setWebSources([]);setLive("");await refresh();return id;}
+ async function openConversation(id:number){if(busy)return;await act(async()=>{setActiveConv(id);setMessages(await call<Msg[]>("conversations:messages",id));setCitations([]);setWebSources([]);setLive("");});}
+ async function newConversation():Promise<number>{if(busy)throw new Error("Finish the current answer first");const id=await call<number>("conversations:create","New conversation");setActiveConv(id);setMessages([]);setCitations([]);setWebSources([]);setLive("");await refresh();return id;}
  async function send(){
    if(!question.trim()||!modelId||busy)return;
    const q=question.trim();setQuestion("");
    await act(async()=>{
      const id=activeConv??await newConversation();
      const requestId=crypto.randomUUID();
-     pending.current=requestId;setLive("");
+     pending.current=requestId;pendingConversation.current=id;setLive("");
      try{
        const r=await call<{answer:string;citations:Citation[];webResults:WebSource[]}>("chat:ask",q,modelId,id,web,requestId);
        setMessages(await call<Msg[]>("conversations:messages",id));
        setCitations(r.citations);setWebSources(r.webResults??[]);
        await refresh();
-     }finally{pending.current=null;setLive("");}
+     }finally{pending.current=null;pendingConversation.current=null;setLive("");}
    });
  }
  async function renameConversation(c:Conv) {
+   if(busy)return;
    const title=window.prompt("Rename conversation:",c.title);
    if(title===null)return;
    await act(async()=>{await call("conversations:rename",c.id,title);await refresh();});
  }
  async function deleteConversation(c:Conv) {
+   if(busy)return;
    if(!window.confirm("Delete this conversation and its messages? This cannot be undone."))return;
    await act(async()=>{await call("conversations:delete",c.id);if(activeConv===c.id){setActiveConv(null);setMessages([]);setCitations([]);setWebSources([]);}await refresh();});
  }
@@ -79,7 +82,7 @@ function App(){
    await act(async()=>{await call("settings:preferences:update",nextTheme,nextMax);setTheme(nextTheme);setMaxTokens(nextMax);});
  }
  async function cancelGeneration(){
-   if(pending.current)await act(async()=>{await call("chat:cancel",pending.current);});
+   if(pending.current){try{await call("chat:cancel",pending.current);}catch(e){setError(String(e));}}
  }
  async function showSource(d:Doc){
    await act(async()=>{const chunks=await call<{page:number|null;section:string|null;text:string}[]>("docs:chunks",d.id);setPreview({name:d.reference+" v"+d.version+" · "+d.title,chunks});});
@@ -91,7 +94,7 @@ function App(){
  return <div className="shell"><aside className="sidebar"><div className="brand">✦ <b>Ephraim</b></div><p className="sub">Local intelligence · Private by design</p>
  {(["chat","library","models","settings"] as const).map(p=><button key={p} className={"nav "+(p===page?"active":"")} onClick={()=>setPage(p)}>{p==="chat"?"◫":p==="library"?"▤":p==="models"?"◈":"⚙"} &nbsp;{p[0].toUpperCase()+p.slice(1)}</button>)}
  {page==="chat"&&<><button className="nav newchat" onClick={()=>void act(async()=>{await newConversation();})}>+ New conversation</button><div className="threads">{convs.map(c=><div key={c.id} className="thread"><button className={"nav "+(activeConv===c.id?"active":"")} onClick={()=>void openConversation(c.id)}>{c.title}</button><button className="mini" title="Rename" onClick={()=>void renameConversation(c)}>✎</button><button className="mini" title="Delete" onClick={()=>void deleteConversation(c)}>×</button></div>)}</div></>}
- <div className="bottom"><small>{user.username} · {user.role}</small><button className="nav" onClick={()=>void act(async()=>{await call("auth:logout");setUser(null);setMessages([]);setCitations([]);setActiveConv(null);setWeb(false);setWebSources([]);pending.current=null;setLive("");})}>Sign out</button></div></aside>
+ <div className="bottom"><small>{user.username} · {user.role}</small><button className="nav" onClick={()=>void act(async()=>{await call("auth:logout");setUser(null);setMessages([]);setCitations([]);setActiveConv(null);setWeb(false);setWebSources([]);pending.current=null;pendingConversation.current=null;setLive("");})}>Sign out</button></div></aside>
  <div className="body"><header><div><h2>{page==="chat"?"Chat":page==="library"?"Knowledge library":page==="models"?"Local GGUF models":"Settings"}</h2><small>Offline-first · No telemetry · Local user data</small></div><span className="privacy">● Local inference</span></header>
  {error&&<div className="alert" role="alert">{error}</div>}
  {page==="chat"&&<><div className="toolbar"><select aria-label="Choose model" value={modelId} onChange={e=>setModelId(Number(e.target.value))}><option value={0}>Choose an approved chat model</option>{models.filter(m=>m.enabled&&m.kind==="chat").map(m=><option key={m.id} value={m.id}>{m.name}</option>)}</select>
