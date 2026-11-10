@@ -289,7 +289,7 @@ app.whenReady().then(async()=>{
   uiTrace("before-browser");
   window=new BrowserWindow({
     width:1260,height:850,minWidth:920,minHeight:650,show:false,
-    webPreferences:{preload:join(__dirname,"../preload/index.js"),sandbox:true,contextIsolation:true,nodeIntegration:false,webSecurity:true}
+    webPreferences:{preload:join(__dirname,"../preload/index.cjs"),sandbox:true,contextIsolation:true,nodeIntegration:false,webSecurity:true}
   });
   uiTrace("browser-created");
   window.webContents.on("dom-ready",()=>uiTrace("dom-ready"));
