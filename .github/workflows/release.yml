@@ -1,11 +1,5 @@
 name: Publish Ephraim Beta
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'RELEASE_NOTES.md'
-      - 'README.md'
-      - '.github/workflows/release.yml'
   workflow_dispatch:
 permissions:
   contents: read

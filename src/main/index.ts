@@ -2,7 +2,8 @@ import { app, BrowserWindow, dialog, ipcMain, safeStorage, shell, session } from
 import { join, basename } from "node:path";
 import { mkdirSync, existsSync, writeFileSync, appendFileSync } from "node:fs";
 import { KnowledgeStore, type Person, type SourceChunk } from "./store";
-import { importGGUF, generate, testChat, testEmbedding, getEmbedding, releaseModel } from "./runtime";
+import { importGGUF, generate, testChat, testEmbedding, getEmbedding, releaseModel, generateWithTools } from "./runtime";
+import {ToolGate} from "./agent-policy";
 import { quarantineManagedModel } from "./model-files";
 import { extractPages } from "./documents";
 import { tavilySearch } from "./search";
@@ -190,10 +191,10 @@ function bindIPC(){
     if(runningChat?.requestId!==requestId||runningChat.ownerId!==u.id)return false;
     runningChat.controller.abort();return true;
   });
-  handler("chat:ask",async(question:string,modelId:number,conversationId:number,useWeb:boolean,requestId:string)=>{
+  handler("chat:ask",async(question:string,modelId:number,conversationId:number,useWeb:boolean,requestId:string,agentMode=false)=>{
     if(typeof requestId!=="string"||!/^[0-9a-f]{8}-[0-9a-f-]{20,50}$/i.test(requestId))throw new Error("Invalid request identifier");
     const u=requireAuth();
-    if(!validText(question,4000)||!validId(modelId)||!validId(conversationId)||typeof useWeb!=="boolean")throw new Error("Invalid chat request");
+    if(!validText(question,4000)||!validId(modelId)||!validId(conversationId)||typeof useWeb!=="boolean"||typeof agentMode!=="boolean")throw new Error("Invalid chat request");
     // Before model or search activity, confirm caller owns the conversation.
     const previous=db.getMessages(u.id,conversationId).slice(-8).map(m=>({role:m.role as "user"|"assistant",text:String(m.text)}));
     if(chatBusy)throw new Error("A response is already being generated");
@@ -211,7 +212,40 @@ function bindIPC(){
       let sources:SourceChunk[]=[];
       let response="";
       let webResults:WebResult[]=[];
-      if(summarizeNamed) {
+      let toolsUsed:string[]=[];
+      if(agentMode) {
+        const tracked=new Map<number,SourceChunk>();
+        const gate=new ToolGate(()=>{
+          if(!active||active.id!==u.id||controller.signal.aborted)throw new Error("User session changed or generation cancelled");
+        },useWeb);
+        const cite=(chunks:SourceChunk[])=>{
+          return chunks.map(c=>{
+            tracked.set(c.id,c);
+            return {label:"[D"+tracked.size+"]",documentId:c.documentId,reference:c.reference,version:c.version,page:c.page,section:c.section,text:c.excerpt.slice(0,780)};
+          });
+        };
+        response=await generateWithTools(modelPath,question,previous,gate,{
+          listDocuments:async()=>db.listDocuments(u.id).filter(d=>d.status==="approved").slice(0,40).map(d=>({id:d.id,title:d.title,reference:d.reference,version:d.version})),
+          searchDocuments:async(query)=>cite(db.retrieve(u.id,query).slice(0,5)),
+          readDocument:async(id)=>cite(db.documentChunks(u.id,id).slice(0,6)),
+          getDocumentVersions:async(reference)=>db.listDocuments(u.id).filter(d=>d.reference.toLowerCase()===reference.toLowerCase()).slice(0,20).map(d=>({id:d.id,title:d.title,reference:d.reference,version:d.version,status:d.status})),
+          ...(useWeb?{searchPublicWeb:async()=>{
+            const key=await getKey();
+            if(!key)return {error:"Internet provider is not configured"};
+            const consent=await dialog.showMessageBox(window!,{
+              type:"warning",title:"External internet search",
+              message:"Allow Ephraim to send this exact question to Tavily?",
+              detail:question,
+              buttons:["Send question","Cancel"],defaultId:1,cancelId:1,noLink:true
+            });
+            if(consent.response!==0)return {error:"User declined internet search"};
+            webResults=await tavilySearch(question,key);
+            return webResults.map((r,i)=>({label:"[W"+(i+1)+"]",title:r.title,url:r.url,excerpt:r.snippet,publishedDate:r.publishedDate}));
+          }}:{}),
+        },options);
+        sources=Array.from(tracked.values());
+        toolsUsed=gate.used();
+      } else if(summarizeNamed) {
         sources=db.documentChunks(u.id,named!.id);
         response=await hierarchicalSummary(sources.map((c,i)=>sourceLabel(c,i)+"\n"+c.excerpt),async(text,instruction)=>{
           return generate(modelPath,instruction,text,[],instruction.includes("Summarise the complete document")?options:{maxTokens:options.maxTokens,signal:controller.signal});
@@ -250,7 +284,7 @@ function bindIPC(){
       return {answer:response,citations:sources.map((s,i)=>({
         label:"D"+(i+1),documentId:s.documentId,chunkId:s.id,title:s.title,
         reference:s.reference,version:s.version,page:s.page,section:s.section,excerpt:s.excerpt.slice(0,450)
-      })),webResults,searchedWeb:useWeb};
+      })),webResults,searchedWeb:useWeb,toolsUsed};
     }finally{chatBusy=false;runningChat=null;}
   });
   handler("settings:status",async()=>{requireAuth();return {hasWebKey:!!(await getKey()),secureStorage:await searchEncryptionAvailable()};});
