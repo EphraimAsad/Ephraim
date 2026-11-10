@@ -9,7 +9,7 @@
 [Releases](https://github.com/EphraimAsad/Ephraim/releases) · [Installation](#installation) · [Features](#features) · [Privacy](#privacy--security) · [Development](#development)
 
 ![License](https://img.shields.io/badge/license-MIT-blue)
-![Status](https://img.shields.io/badge/status-beta-orange)
+![Status](https://img.shields.io/badge/status-beta%20candidate-orange)
 ![Platform](https://img.shields.io/badge/platform-Windows%20x64-0078D6)
 ![Inference](https://img.shields.io/badge/AI-local%20GGUF-5955AD)
 ![Cost](https://img.shields.io/badge/mandatory%20API%20cost-%C2%A30-brightgreen)
