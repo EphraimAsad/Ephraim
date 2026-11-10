@@ -48,25 +48,24 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: gitleaks/gitleaks-action@v3
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITLEAKS_ENABLE_COMMENTS: "false"
-          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: "false"
-          GITLEAKS_ENABLE_SUMMARY: "false"
-      - name: Check complete Git history without logging secret values
+      - name: Install open-source Gitleaks scanner
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 --silent --show-error "https://github.com/gitleaks/gitleaks/releases/download/v8.24.3/gitleaks_8.24.3_linux_x64.tar.gz" -o /tmp/gitleaks.tar.gz
+          mkdir -p /tmp/gitleaks
+          tar -xzf /tmp/gitleaks.tar.gz -C /tmp/gitleaks gitleaks
+      - name: Scan full reachable history (no secret values in logs)
         shell: bash
         run: |
           set +e
-          BIN=$(find /tmp -maxdepth 3 -type f -name gitleaks -print -quit)
-          if [ -z "$BIN" ]; then echo "Gitleaks binary unavailable"; exit 1; fi
-          "$BIN" detect --source=. --redact --no-banner --log-opts="--all" --exit-code=2 > /tmp/full-history-scan.log 2>&1
-          status=$?
-          if [ "$status" -ne 0 ]; then
-            echo "Potential secrets detected or full-history scan failed. Investigate privately, rotate compromised credentials, and review history."
-            exit "$status"
+          /tmp/gitleaks/gitleaks detect --source=. --redact --no-banner --log-opts="--all" --exit-code=2 > /tmp/gitleaks.log 2>&1
+          result=$?
+          if [ "$result" -ne 0 ]; then
+            echo "Secret scan failed or potential credentials detected. Review privately; do not publish scan output."
+            exit "$result"
           fi
-          grep -E "commits scanned|no leaks found" /tmp/full-history-scan.log | sed -E 's/\x1B\[[0-9;]*[mK]//g' || true
+          grep -E "commits scanned|no leaks found" /tmp/gitleaks.log | sed -E 's/\x1B\[[0-9;]*[mK]//g' || true
