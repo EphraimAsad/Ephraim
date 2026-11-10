@@ -33,7 +33,7 @@ async function chat(path:string) {
   if(chatPath===path&&chatModel)return chatModel;
   if(chatModel){await chatModel.dispose();chatModel=null;chatPath=null;}
   trace("before-getLlama");
-  const llama=await getLlama({gpu:process.argv.includes("--ephraim-self-test")?false:"auto",build:"never"});
+  const llama=await getLlama({build:"never"});
   trace("after-getLlama");
   trace("before-loadModel");
   const model=await llama.loadModel({modelPath:path});
@@ -52,7 +52,7 @@ export async function generate(path:string,question:string,sourceText:string,pre
     const model=await chat(path);
     trace("after-chat");
     trace("before-createContext");
-    context=await model.createContext({contextSize:process.argv.includes("--ephraim-self-test")?1024:4096});
+    context=await model.createContext({contextSize:4096});
     trace("after-createContext");
     const session=new LlamaChatSession({contextSequence:context.getSequence()});
     const memory=previous.slice(-6).map(m=>(m.role==="user"?"User":"Assistant")+": "+m.text.slice(0,600)).join("\n");
@@ -78,7 +78,7 @@ export async function generate(path:string,question:string,sourceText:string,pre
   }
 }
 export async function testChat(path:string):Promise<void> {
-  const answer=await generate(path,"Say only the word READY.","",[],{maxTokens:16});
+  const answer=await generate(path,"Say only the word READY.","");
   if(!answer.trim())throw new Error("No response from model");
 }
 async function embedding(path:string) {
