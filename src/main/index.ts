@@ -298,9 +298,9 @@ app.whenReady().then(async()=>{
     const clean=String(error?.message??"unknown").replace(/(?:[A-Za-z]:\\|\/home\/)[^\s]*/g,"[local-path]").slice(0,160);
     uiTrace("preload-error: "+clean);
   });
-  window.webContents.on("console-message",(_event,details)=>{
-    if(details.level==="error"){
-      const clean=String(details.message??"unknown").replace(/(?:[A-Za-z]:\\|\/home\/)[^\s]*/g,"[local-path]").slice(0,160);
+  window.webContents.on("console-message",(_event,level,message)=>{
+    if(level>=3){
+      const clean=String(message??"unknown").replace(/(?:[A-Za-z]:\\|\/home\/)[^\s]*/g,"[local-path]").slice(0,160);
       uiTrace("renderer-console-error: "+clean);
     }
   });
