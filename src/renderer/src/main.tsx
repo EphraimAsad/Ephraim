@@ -25,7 +25,7 @@ function App(){
  const [page,setPage]=useState<"chat"|"library"|"models"|"settings">("chat"),[error,setError]=useState(""),[busy,setBusy]=useState(false);
  const [models,setModels]=useState<Model[]>([]),[modelId,setModelId]=useState(0),[docs,setDocs]=useState<Doc[]>([]);
  const [convs,setConvs]=useState<Conv[]>([]),[activeConv,setActiveConv]=useState<number|null>(null),[messages,setMessages]=useState<Msg[]>([]);
- const [question,setQuestion]=useState(""),[web,setWeb]=useState(false),[webKey,setWebKey]=useState(""),[hasWebKey,setHasWebKey]=useState(false),[safeKey,setSafeKey]=useState(false);
+ const [question,setQuestion]=useState(""),[agentMode,setAgentMode]=useState(false),[toolsUsed,setToolsUsed]=useState<string[]>([]),[web,setWeb]=useState(false),[webKey,setWebKey]=useState(""),[hasWebKey,setHasWebKey]=useState(false),[safeKey,setSafeKey]=useState(false);
  const [modelName,setModelName]=useState(""),[modelKind,setModelKind]=useState<"chat"|"embedding">("chat");
  const [reference,setReference]=useState(""),[visibility,setVisibility]=useState<"private"|"shared">("shared");
  const [account,setAccount]=useState(""),[accountPassword,setAccountPassword]=useState("");
@@ -54,7 +54,7 @@ function App(){
    document.documentElement.classList.toggle("theme-dark",theme==="dark");
  },[theme]);
  async function signIn(){await act(async()=>{const u=await call<User>(setup?"auth:setup":"auth:login",username,password);setUser(u);setPassword("");});}
- async function openConversation(id:number){if(busy)return;await act(async()=>{setActiveConv(id);setMessages(await call<Msg[]>("conversations:messages",id));setCitations([]);setWebSources([]);setLive("");});}
+ async function openConversation(id:number){if(busy)return;await act(async()=>{setActiveConv(id);setMessages(await call<Msg[]>("conversations:messages",id));setCitations([]);setWebSources([]);setToolsUsed([]);setLive("");});}
  async function newConversation():Promise<number>{if(busy)throw new Error("Finish the current answer first");const id=await call<number>("conversations:create","New conversation");setActiveConv(id);setMessages([]);setCitations([]);setWebSources([]);setLive("");await refresh();return id;}
  async function send(){
    if(!question.trim()||!modelId||busy)return;
@@ -64,9 +64,9 @@ function App(){
      const requestId=crypto.randomUUID();
      pending.current=requestId;pendingConversation.current=id;setLive("");
      try{
-       const r=await call<{answer:string;citations:Citation[];webResults:WebSource[]}>("chat:ask",q,modelId,id,web,requestId);
+       const r=await call<{answer:string;citations:Citation[];webResults:WebSource[];toolsUsed?:string[]}>("chat:ask",q,modelId,id,web,requestId,agentMode);
        setMessages(await call<Msg[]>("conversations:messages",id));
-       setCitations(r.citations);setWebSources(r.webResults??[]);
+       setCitations(r.citations);setWebSources(r.webResults??[]);setToolsUsed(r.toolsUsed??[]);
        await refresh();
      }finally{pending.current=null;pendingConversation.current=null;setLive("");}
    });
@@ -98,14 +98,15 @@ function App(){
  return <div className="shell"><aside className="sidebar"><div className="brand">✦ <b>Ephraim</b></div><p className="sub">Local intelligence · Private by design</p>
  {(["chat","library","models","settings"] as const).map(p=><button key={p} className={"nav "+(p===page?"active":"")} onClick={()=>setPage(p)}>{p==="chat"?"◫":p==="library"?"▤":p==="models"?"◈":"⚙"} &nbsp;{p[0].toUpperCase()+p.slice(1)}</button>)}
  {page==="chat"&&<><button className="nav newchat" onClick={()=>void act(async()=>{await newConversation();})}>+ New conversation</button><div className="threads">{convs.map(c=><div key={c.id} className="thread"><button className={"nav "+(activeConv===c.id?"active":"")} onClick={()=>void openConversation(c.id)}>{c.title}</button><button className="mini" title="Rename" onClick={()=>void renameConversation(c)}>✎</button><button className="mini" title="Delete" onClick={()=>void deleteConversation(c)}>×</button></div>)}</div></>}
- <div className="bottom"><small>{user.username} · {user.role}</small><button className="nav" onClick={()=>void act(async()=>{await call("auth:logout");setUser(null);setMessages([]);setCitations([]);setActiveConv(null);setWeb(false);setWebSources([]);pending.current=null;pendingConversation.current=null;setLive("");})}>Sign out</button></div></aside>
+ <div className="bottom"><small>{user.username} · {user.role}</small><button className="nav" onClick={()=>void act(async()=>{await call("auth:logout");setUser(null);setMessages([]);setCitations([]);setActiveConv(null);setWeb(false);setAgentMode(false);setToolsUsed([]);setWebSources([]);pending.current=null;pendingConversation.current=null;setLive("");})}>Sign out</button></div></aside>
  <div className="body"><header><div><h2>{page==="chat"?"Chat":page==="library"?"Knowledge library":page==="models"?"Local GGUF models":"Settings"}</h2><small>Offline-first · No telemetry · Local user data</small></div><span className="privacy">● Local inference</span></header>
  {error&&<div className="alert" role="alert">{error}</div>}
  {page==="chat"&&<><div className="toolbar"><select aria-label="Choose model" value={modelId} onChange={e=>setModelId(Number(e.target.value))}><option value={0}>Choose an approved chat model</option>{models.filter(m=>m.enabled&&m.kind==="chat").map(m=><option key={m.id} value={m.id}>{m.name}</option>)}</select>
- <label className="check"><input type="checkbox" checked={web} disabled={!hasWebKey} onChange={e=>setWeb(e.target.checked)}/> External web search {hasWebKey?"(consent each time)":"(not configured)"}</label></div>
+ <label className="check"><input type="checkbox" checked={agentMode} onChange={e=>setAgentMode(e.target.checked)}/> Agent tools (local document tools)</label><label className="check"><input type="checkbox" checked={web} disabled={!hasWebKey} onChange={e=>setWeb(e.target.checked)}/> Allow web tool {hasWebKey?"(asks each time)":"(not configured)"}</label></div>
  <div className="conversation">{messages.length===0?<div className="welcome"><div className="symbol">✦</div><h1>Ask Ephraim anything</h1><p>Summarise TP 4122, explore approved documents or ask a local model. All conversations are private to this account.</p></div>:
  messages.map(m=><div className={"bubble "+m.role} key={m.id}><b>{m.role==="user"?"You":"Ephraim"}</b><p>{m.text}</p></div>)}
  {live&&<div className="bubble assistant streaming"><b>Ephraim · Generating</b><p>{live}</p></div>}
+ {toolsUsed.length>0&&<section className="sourcecard"><h4>Tools used</h4><p>{toolsUsed.join(" · ")}</p></section>}
  {webSources.length>0&&<section className="sourcecard"><h4>Internet sources</h4><p>External information supplied by the selected search provider. Verify original pages.</p>{webSources.map((item,i)=><div className="source" key={item.url}><b>[W{i+1}] {item.title}</b><p>{item.snippet}</p><button onClick={()=>void act(async()=>{await call("web:open",item.url);})}>Open website</button><small>{item.publishedDate??"Date not provided"} · {item.url}</small></div>)}</section>}
  {citations.length>0&&<section className="sourcecard"><h4>Retrieved supporting sources</h4><p>These passages were provided to the model. Always verify important claims against the original.</p>{citations.map(c=><div key={c.chunkId} className="source"><b>[{c.label}] {c.reference} v{c.version}{c.page?" · page "+c.page:""}{c.section?" · "+c.section:""}</b><button onClick={()=>void act(async()=>{await call("docs:open",c.documentId);})}>Open original</button><p>{c.excerpt}</p></div>)}</section>}</div>
  <form className="compose" onSubmit={e=>{e.preventDefault();void send();}}><textarea rows={2} aria-label="Your question" value={question} onChange={e=>setQuestion(e.target.value)} placeholder="Ask about your documents..." />{busy&&pending.current?<button type="button" onClick={()=>void cancelGeneration()}>Stop</button>:null}<button disabled={!modelId||busy||!question.trim()}>{busy?"Working…":"Send ↗"}</button></form></>}
