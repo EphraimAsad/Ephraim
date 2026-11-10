@@ -100,8 +100,7 @@ export async function testChat(path:string):Promise<void> {
       throw new Error("Chat GGUF loaded but returned no final answer (stop reason: "+reason+"). Check model chat-template compatibility and reasoning settings.");
     }
   }finally{
-    if(context)await context.dispose();
-    generating=false;
+    try{if(context)await context.dispose();}finally{generating=false;}
   }
 }
 /** Release cached native handles before deleting an imported model. */
