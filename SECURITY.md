@@ -15,3 +15,9 @@ Controls:
 Remaining security blockers: full history and dependency audit; robust native document parser isolation; OS-backed disk encryption setup; explicit threat modelling of local admin and untrusted users; log and crash-dump review; Windows binary validation, and formal validation for laboratory use. Local DB and documents are plaintext.
 
 Security issues should be disclosed privately to the repository maintainer, without attaching documents, secrets, logs containing private content or credentials.
+
+## Milestone 5 outbound-data controls
+- Web search is never enabled automatically. Electron main validates the signed-in user, verifies that a credential exists, and asks for explicit consent with the exact query before making any Tavily request.
+- Returned web results are untrusted evidence. They are labelled separately from local citations and only accepted as clickable links if they use HTTPS and pass URL checks. Links open outside Ephraim.
+- Live GGUF text streams only to the active Electron window with an ephemeral request identifier; the renderer ignores events for other requests. On account changes or cancellation, partial results are not committed to the message history.
+- Automated scans cannot prove the absence of all personal data. Public Git commit authorship metadata remains visible. A human release review is required.

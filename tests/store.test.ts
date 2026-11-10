@@ -56,3 +56,28 @@ test("model approval requires successful test and embedding uniqueness",()=>{
  assert.equal(store.listModels().filter(m=>m.kind==="embedding"&&m.enabled).length,1);
  store.close();
 });
+
+test("conversation rename and deletion are strictly account scoped",()=>{
+ const {store,alice,bob}=setup();
+ const a=store.createConversation(alice.id,"Alpha");
+ store.addMessage(alice.id,a,"user","synthetic request");
+ assert.throws(()=>store.renameConversation(bob.id,a,"Stolen"),/not found/);
+ assert.throws(()=>store.deleteConversation(bob.id,a),/not found/);
+ store.renameConversation(alice.id,a,"Renamed");
+ assert.equal(store.listConversations(alice.id)[0].title,"Renamed");
+ store.deleteConversation(alice.id,a);
+ assert.equal(store.listConversations(alice.id).length,0);
+ assert.throws(()=>store.getMessages(alice.id,a),/not found/);
+ store.close();
+});
+test("appearance and generation settings are per-user and validated",()=>{
+ const {store,alice,bob}=setup();
+ store.setUserPreference(alice.id,"theme","light");
+ store.setUserPreference(alice.id,"maxTokens","512");
+ assert.equal(store.getUserPreference(alice.id,"theme"),"light");
+ assert.equal(store.getUserPreference(bob.id,"theme"),null);
+ assert.equal(store.getUserPreference(bob.id,"maxTokens"),null);
+ assert.throws(()=>store.setUserPreference(alice.id,"theme","random"),/theme/);
+ assert.throws(()=>store.setUserPreference(alice.id,"maxTokens","unbounded"),/tokens/);
+ store.close();
+});

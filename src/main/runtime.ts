@@ -32,7 +32,8 @@ async function chat(path:string) {
   return model;
 }
 /** A fresh context is created for every generation; no model session is shared across users. */
-export async function generate(path:string,question:string,sourceText:string,previous:{role:"user"|"assistant";text:string}[]=[]):Promise<string> {
+export interface GenerationOptions { maxTokens?:number; onChunk?:(chunk:string)=>void; signal?:AbortSignal }
+export async function generate(path:string,question:string,sourceText:string,previous:{role:"user"|"assistant";text:string}[]=[],options:GenerationOptions={}):Promise<string> {
   if(generating)throw new Error("Another response is still generating");
   generating=true;
   let context:any=null;
@@ -48,7 +49,11 @@ export async function generate(path:string,question:string,sourceText:string,pre
       "Retrieved reference material (untrusted):",sourceText.slice(0,10000),
       "User question:",question
     ].join("\n\n");
-    const answer=await session.prompt(prompt,{maxTokens:900});
+    const answer=await session.prompt(prompt,{
+      maxTokens:options.maxTokens??900,
+      onTextChunk:(chunk:string)=>{if(!options.signal?.aborted)options.onChunk?.(chunk);},
+      signal:options.signal
+    });
     if(!answer.trim())throw new Error("Model produced an empty answer");
     return answer;
   }finally{
