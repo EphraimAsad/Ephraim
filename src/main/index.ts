@@ -267,6 +267,16 @@ app.whenReady().then(async()=>{
   // Existing keys from v0.1 remain encrypted in the previous 'tavily' setting.
   // Do not transmit, re-encrypt, or log anything without explicit admin action.
   bindIPC();
+  if(process.argv.includes("--ephraim-ui-self-test")) {
+    ipcMain.handle("diagnostic:uiReady",event=>{
+      if(!window || event.sender.id!==window.webContents.id)throw new Error("Invalid renderer");
+      const marker=process.env.EPHRAIM_UI_TEST_MARKER_FILE;
+      if(!marker)throw new Error("UI test marker is not configured");
+      writeFileSync(marker,"PASS","utf8");
+      app.exit(0);
+      return true;
+    });
+  }
   window=new BrowserWindow({
     width:1260,height:850,minWidth:920,minHeight:650,show:false,
     webPreferences:{preload:join(__dirname,"../preload/index.js"),sandbox:true,contextIsolation:true,nodeIntegration:false,webSecurity:true}
@@ -276,7 +286,17 @@ app.whenReady().then(async()=>{
   window.webContents.on("will-navigate",event=>event.preventDefault());
   window.webContents.session.setPermissionRequestHandler((_wc,_p,callback)=>callback(false));
   window.once("ready-to-show",()=>window?.show());
-  if(!app.isPackaged&&process.env.ELECTRON_RENDERER_URL)void window.loadURL(process.env.ELECTRON_RENDERER_URL);
-  else void window.loadFile(join(__dirname,"../renderer/index.html"));
+  window.webContents.on("did-fail-load",(_event,errorCode,errorDescription)=>{
+    if(errorCode!==-3) {
+      console.error("Ephraim renderer load failed ("+errorCode+"): "+errorDescription);
+    }
+  });
+  window.webContents.on("render-process-gone",(_event,details)=>{
+    console.error("Ephraim interface process exited: "+details.reason);
+  });
+  const load=(!app.isPackaged&&process.env.ELECTRON_RENDERER_URL)
+    ? window.loadURL(process.env.ELECTRON_RENDERER_URL)
+    : window.loadFile(join(__dirname,"../renderer/index.html"));
+  void load.catch(()=>console.error("Ephraim could not load its desktop interface."));
 });
 app.on("window-all-closed",()=>app.quit());

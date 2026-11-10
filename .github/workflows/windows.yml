@@ -25,6 +25,24 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Electron build failed' }
           npx electron-builder --win --x64 --dir
           if ($LASTEXITCODE -ne 0) { throw 'Windows application packaging failed' }
+      - name: Confirm renderer uses local relative asset paths
+        shell: pwsh
+        run: node scripts/verify-renderer.mjs
+      - name: Test that packaged React interface actually mounts
+        shell: pwsh
+        timeout-minutes: 3
+        run: |
+          $env:EPHRAIM_UI_TEST_MARKER_FILE = Join-Path $env:RUNNER_TEMP 'ephraim-ui-ready.txt'
+          $proc = Start-Process -FilePath '.\release\win-unpacked\Ephraim.exe' -ArgumentList '--ephraim-ui-self-test' -PassThru
+          if (-not $proc.WaitForExit(60000)) {
+            Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+            throw 'Ephraim UI did not mount within 60 seconds'
+          }
+          if ($proc.ExitCode -ne 0) { throw "Ephraim UI process exited ($($proc.ExitCode))" }
+          if ((-not (Test-Path $env:EPHRAIM_UI_TEST_MARKER_FILE)) -or ((Get-Content $env:EPHRAIM_UI_TEST_MARKER_FILE -Raw).Trim() -ne 'PASS')) {
+            throw 'React interface did not report ready'
+          }
+          Write-Output 'Packaged Electron renderer and React UI verified.'
       - name: Download public tiny GGUF for packaged inference test
         shell: pwsh
         run: |
