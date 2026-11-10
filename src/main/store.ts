@@ -91,6 +91,18 @@ export class KnowledgeStore {
     if(!r)throw new Error("Model not found");
     return {path:String(r.path),kind:String(r.kind)};
   }
+  deleteModel(id:number):void {
+    if(!validId(id))throw new Error("Invalid model");
+    const record=this.db.prepare("SELECT id FROM models WHERE id=?").get(id) as Row|undefined;
+    if(!record)throw new Error("Model not found");
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      // Indexed vectors from a deleted embedding model must not be reused.
+      this.db.prepare("UPDATE v2_chunks SET embedding_model=NULL,embedding=NULL WHERE embedding_model=?").run(id);
+      this.db.prepare("DELETE FROM models WHERE id=?").run(id);
+      this.db.exec("COMMIT");
+    }catch(e){this.db.exec("ROLLBACK");throw e;}
+  }
   modelForUse(id:number,kind:"chat"|"embedding"):string {
     const r=this.db.prepare("SELECT path FROM models WHERE id=? AND kind=? AND enabled=1 AND tested=1").get(id,kind) as Row|undefined;
     if(!r)throw new Error("Model is not approved");

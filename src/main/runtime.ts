@@ -71,7 +71,7 @@ export async function generate(path:string,question:string,sourceText:string,pre
     trace("before-prompt");
     const answer=process.argv.includes("--ephraim-self-test")
       ? await session.prompt("Say READY.",{maxTokens:16})
-      : await session.prompt(prompt,promptOptions);
+      : await session.prompt(prompt,{...promptOptions,budgets:{thoughtTokens:Math.min(768,Math.floor((options.maxTokens??900)*0.55))}});
     trace("after-prompt");
     if(!answer.trim())throw new Error("Model produced an empty answer");
     return answer;
@@ -80,8 +80,43 @@ export async function generate(path:string,question:string,sourceText:string,pre
   }
 }
 export async function testChat(path:string):Promise<void> {
-  const answer=await generate(path,"Say only the word READY.","");
-  if(!answer.trim())throw new Error("No response from model");
+  if(generating)throw new Error("A chat model is already generating");
+  generating=true;
+  let context:any=null;
+  try{
+    const model=await chat(path);
+    context=await model.createContext({contextSize:4096});
+    const session=new LlamaChatSession({contextSequence:context.getSequence()});
+    // For reasoning models, a small overall token budget can expire during thoughts
+    // before any visible answer is emitted. Keep a bounded thought budget.
+    const result=await session.promptWithMeta(
+      "Reply with the single word READY as your final answer.",
+      {maxTokens:1024,budgets:{thoughtTokens:384},temperature:0}
+    );
+    if(!result.responseText.trim()){
+      const reason=String(result.stopReason);
+      const hadSegments=result.response.some((part:unknown)=>typeof part!=="string");
+      if(reason==="maxTokens"&&hadSegments)throw new Error("Model generated reasoning but no final answer before its token budget. The GGUF may need more output tokens or a compatible chat template.");
+      throw new Error("Chat GGUF loaded but returned no final answer (stop reason: "+reason+"). Check model chat-template compatibility and reasoning settings.");
+    }
+  }finally{
+    if(context)await context.dispose();
+    generating=false;
+  }
+}
+/** Release cached native handles before deleting an imported model. */
+export async function releaseModel(path:string):Promise<void> {
+  if(generating||embeddingBusy)throw new Error("Wait for current inference or indexing to finish before deleting a model");
+  if(chatPath===path){
+    if(chatModel)await chatModel.dispose();
+    chatModel=null;chatPath=null;
+  }
+  if(embeddingPath===path){
+    if(embeddingContext)await embeddingContext.dispose();
+    embeddingContext=null;
+    if(embeddingModel)await embeddingModel.dispose();
+    embeddingModel=null;embeddingPath=null;
+  }
 }
 async function embedding(path:string) {
   if(embeddingPath===path&&embeddingContext)return embeddingContext;

@@ -1,7 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 const channels=[
  "auth:state","auth:setup","auth:login","auth:logout","users:create",
- "models:list","models:import","models:test","models:enable",
+ "models:list","models:import","models:test","models:enable","models:delete",
  "docs:list","docs:import","docs:chunks","docs:open","docs:reindex",
  "conversations:list","conversations:create","conversations:messages",
  "conversations:rename","conversations:delete","chat:ask","chat:cancel",
