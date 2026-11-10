@@ -5,6 +5,7 @@ import { KnowledgeStore, type Person, type SourceChunk } from "./store";
 import { importGGUF, generate, testChat, testEmbedding, getEmbedding } from "./runtime";
 import { extractPages } from "./documents";
 import { tavilySearch } from "./search";
+import { formatWebResults, safeWebUrl, type WebResult } from "../core/research";
 import { hierarchicalSummary, isSummaryRequest } from "../core/knowledge";
 
 let db:KnowledgeStore;
@@ -13,6 +14,7 @@ let window:BrowserWindow|null=null;
 let failedLogins=0;
 let lastFailed=0;
 let chatBusy=false;
+let runningChat:{requestId:string;ownerId:number;conversationId:number;controller:AbortController}|null=null;
 const validId=(n:unknown):n is number=>Number.isSafeInteger(n)&&Number(n)>0;
 const validText=(n:unknown,max:number):n is string=>typeof n==="string"&&n.trim().length>0&&n.length<=max;
 function requireAuth():Person{if(!active)throw new Error("Sign in required");return active;}
@@ -130,23 +132,60 @@ function bindIPC(){
   handler("conversations:messages",(id:number)=>{
     const u=requireAuth();return db.getMessages(u.id,id);
   });
-  handler("chat:ask",async(question:string,modelId:number,conversationId:number,useWeb:boolean)=>{
+  handler("conversations:rename",(id:number,title:string)=>{
+    const u=requireAuth();if(!validId(id)||!validText(title,120))throw new Error("Invalid conversation title");
+    db.renameConversation(u.id,id,title);return true;
+  });
+  handler("conversations:delete",(id:number)=>{
+    const u=requireAuth();if(!validId(id))throw new Error("Invalid conversation");
+    if(runningChat?.conversationId===id&&runningChat.ownerId===u.id)throw new Error("Finish or cancel generation first");
+    db.deleteConversation(u.id,id);return true;
+  });
+  handler("settings:preferences",()=>{
+    const u=requireAuth();return {theme:db.getUserPreference(u.id,"theme")??"dark",maxTokens:Number(db.getUserPreference(u.id,"maxTokens")??"900")};
+  });
+  handler("settings:preferences:update",(theme:string,maxTokens:number)=>{
+    const u=requireAuth();
+    if(!["dark","light","system"].includes(theme)||![256,512,900,1500,2048].includes(maxTokens))throw new Error("Unsupported preference");
+    db.setUserPreference(u.id,"theme",theme);
+    db.setUserPreference(u.id,"maxTokens",String(maxTokens));
+    return true;
+  });
+  handler("web:open",async(raw:string)=>{
+    requireAuth();const url=safeWebUrl(raw);
+    if(!url)throw new Error("Unsafe external link");
+    await shell.openExternal(url);return true;
+  });
+  handler("chat:cancel",(requestId:string)=>{
+    const u=requireAuth();
+    if(runningChat?.requestId!==requestId||runningChat.ownerId!==u.id)return false;
+    runningChat.controller.abort();return true;
+  });
+  handler("chat:ask",async(question:string,modelId:number,conversationId:number,useWeb:boolean,requestId:string)=>{
+    if(typeof requestId!=="string"||!/^[0-9a-f]{8}-[0-9a-f-]{20,50}$/i.test(requestId))throw new Error("Invalid request identifier");
     const u=requireAuth();
     if(!validText(question,4000)||!validId(modelId)||!validId(conversationId)||typeof useWeb!=="boolean")throw new Error("Invalid chat request");
     // Before model or search activity, confirm caller owns the conversation.
     const previous=db.getMessages(u.id,conversationId).slice(-8).map(m=>({role:m.role as "user"|"assistant",text:String(m.text)}));
     if(chatBusy)throw new Error("A response is already being generated");
     chatBusy=true;
+    const controller=new AbortController();
+    runningChat={requestId,ownerId:u.id,conversationId,controller};
+    const stream=(chunk:string)=>{
+      if(!controller.signal.aborted && active?.id===u.id && window&&!window.isDestroyed())window.webContents.send("chat:chunk",{requestId,conversationId,chunk});
+    };
+    const options={maxTokens:Number(db.getUserPreference(u.id,"maxTokens")??"900"),onChunk:stream,signal:controller.signal};
     try {
       const modelPath=db.modelForUse(modelId,"chat");
       const named=db.findDocument(u.id,question);
       const summarizeNamed=!!named&&isSummaryRequest(question);
       let sources:SourceChunk[]=[];
       let response="";
+      let webResults:WebResult[]=[];
       if(summarizeNamed) {
         sources=db.documentChunks(u.id,named!.id);
         response=await hierarchicalSummary(sources.map((c,i)=>sourceLabel(c,i)+"\n"+c.excerpt),async(text,instruction)=>{
-          return generate(modelPath,instruction,text);
+          return generate(modelPath,instruction,text,[],instruction.includes("Summarise the complete document")?options:{maxTokens:options.maxTokens,signal:controller.signal});
         },6500);
       } else {
         let queryEmbedding:undefined|{modelId:number;vector:number[]};
@@ -170,19 +209,20 @@ function bindIPC(){
           });
           if(consent.response!==0)throw new Error("External search cancelled");
           // Only the literal user question is sent to Tavily, NEVER retrieved private source material.
-          webText=await tavilySearch(question,key);
+          webResults=await tavilySearch(question,key);
+          webText=formatWebResults(webResults);
         }
-        response=await generate(modelPath,question,privateSource+"\n\n"+webText,previous);
+        response=await generate(modelPath,question,privateSource+"\n\n"+webText,previous,options);
       }
       // Store only after success, and only against the currently authenticated owner.
-      if(!active||active.id!==u.id)throw new Error("Session changed during generation");
+      if(!active||active.id!==u.id||controller.signal.aborted)throw new Error("Generation cancelled or session changed");
       db.addMessage(u.id,conversationId,"user",question);
       db.addMessage(u.id,conversationId,"assistant",response);
       return {answer:response,citations:sources.map((s,i)=>({
         label:"D"+(i+1),documentId:s.documentId,chunkId:s.id,title:s.title,
         reference:s.reference,version:s.version,page:s.page,section:s.section,excerpt:s.excerpt.slice(0,450)
-      })),searchedWeb:useWeb};
-    }finally{chatBusy=false;}
+      })),webResults,searchedWeb:useWeb};
+    }finally{chatBusy=false;runningChat=null;}
   });
   handler("settings:status",async()=>{requireAuth();return {hasWebKey:!!(await getKey()),secureStorage:await searchEncryptionAvailable()};});
   handler("settings:searchKey",async(key:string)=>{

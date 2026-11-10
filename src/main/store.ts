@@ -116,6 +116,31 @@ export class KnowledgeStore {
     if(!validId(owner))throw new Error("Invalid user");
     return Number(this.db.prepare("INSERT INTO v2_conversations(owner_id,title) VALUES(?,?)").run(owner,title.slice(0,120)).lastInsertRowid);
   }
+  renameConversation(owner:number,id:number,title:string):void {
+    this.ownsConversation(owner,id);
+    const clean=title.trim();
+    if(clean.length===0||clean.length>120)throw new Error("Invalid conversation title");
+    this.db.prepare("UPDATE v2_conversations SET title=? WHERE id=? AND owner_id=?").run(clean,id,owner);
+  }
+  deleteConversation(owner:number,id:number):void {
+    this.ownsConversation(owner,id);
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      this.db.prepare("DELETE FROM v2_messages WHERE conversation_id=?").run(id);
+      this.db.prepare("DELETE FROM v2_conversations WHERE id=? AND owner_id=?").run(id,owner);
+      this.db.exec("COMMIT");
+    } catch(e) { this.db.exec("ROLLBACK");throw e; }
+  }
+  getUserPreference(owner:number,name:"theme"|"maxTokens"):string|null {
+    if(!validId(owner))throw new Error("Invalid account");
+    return this.getSetting("user."+owner+"."+name);
+  }
+  setUserPreference(owner:number,name:"theme"|"maxTokens",value:string):void {
+    if(!validId(owner))throw new Error("Invalid account");
+    if(name==="theme"&&!["light","dark","system"].includes(value))throw new Error("Invalid theme");
+    if(name==="maxTokens"&&!["256","512","900","1500","2048"].includes(value))throw new Error("Invalid maximum tokens");
+    this.setSetting("user."+owner+"."+name,value);
+  }
   listConversations(owner:number) {
     return readRows(this.db,"SELECT id,title,created FROM v2_conversations WHERE owner_id=? ORDER BY id DESC LIMIT 100",owner);
   }

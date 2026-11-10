@@ -8,9 +8,11 @@ const model=await llama.loadModel({modelPath:file});
 const context=await model.createContext({contextSize:1024});
 try{
   const session=new LlamaChatSession({contextSequence:context.getSequence()});
-  const answer=await session.prompt("Return one word describing the colour of grass.",{maxTokens:30});
+  let streamed="";let chunks=0;
+  const answer=await session.prompt("Return one word describing the colour of grass.",{maxTokens:30,onTextChunk:(part)=>{streamed+=part;chunks++;}});
   if(!answer.trim())throw new Error("Local GGUF model produced an empty answer");
-  console.log("Real GGUF CPU inference succeeded; response length: "+answer.length);
+  if(chunks<1 || !streamed.trim())throw new Error("GGUF token streaming produced no updates");
+  console.log("Real GGUF CPU inference and streaming succeeded; response length: "+answer.length+", chunk events: "+chunks);
 }finally{
   await context.dispose();
   await model.dispose();
