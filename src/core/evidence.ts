@@ -12,14 +12,24 @@ export function selectPassages<T extends LocalPassage>(items:readonly T[],query:
   }).slice(0,Math.max(1,limit)).map(x=>x.c);
 }
 export function composeEvidence<T extends LocalPassage>(local:readonly T[],web:readonly WebResult[]):string {
-  const doc=local.slice(0,8).map((c,i)=>{
-    const at=(c.page?" page "+c.page:"")+(c.section?" section "+c.section:"");
-    return "[D"+(i+1)+"] "+c.reference+" version "+c.version+at+"\n"+c.excerpt.slice(0,1300);
-  }).join("\n\n");
-  const external=web.slice(0,5).map((r,i)=>"[W"+(i+1)+"] "+r.title+
-    "\nURL: "+r.url+(r.publishedDate?"\nPublished: "+r.publishedDate:"")+
-    "\nExcerpt: "+r.snippet.slice(0,1400)).join("\n\n");
-  return [doc,external].filter(Boolean).join("\n\n");
+  const sections:string[]=[];
+  const l=local.slice(0,7),w=web.slice(0,5);
+  // Interleaving makes both local and public evidence available even with a
+  // small GGUF context window, instead of truncating all web results away.
+  for(let i=0;i<Math.max(l.length,w.length);i++){
+    if(i<l.length){
+      const c=l[i];
+      const at=(c.page?" page "+c.page:"")+(c.section?" section "+c.section:"");
+      sections.push("[D"+(i+1)+"] "+c.reference+" version "+c.version+at+"\n"+c.excerpt.slice(0,1000));
+    }
+    if(i<w.length){
+      const r=w[i];
+      sections.push("[W"+(i+1)+"] "+r.title+"\nURL: "+r.url+
+        (r.publishedDate?"\nPublished: "+r.publishedDate:"")+
+        "\nExcerpt: "+r.snippet.slice(0,1300));
+    }
+  }
+  return sections.join("\n\n");
 }
 /** This catches fabricated reference labels; it cannot verify the factual entailment of a claim. */
 export function validateCitationLabels(answer:string,localCount:number,webCount:number):{answer:string;invalid:string[]} {
