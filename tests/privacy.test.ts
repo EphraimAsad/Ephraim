@@ -1,9 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
-test("search is opt-in and only literal question is transmitted",()=>{
+test("search is opt-in and transmits only a reviewed public query",()=>{
  const code=readFileSync("src/main/index.ts","utf8");
- assert.ok(code.includes("if(useWeb)"));
+ assert.ok(code.includes("webEnabled:useWeb"));
  assert.ok(code.includes("tavilySearch(query,key)"));
  assert.ok(!code.includes("tavilySearch(privateSource"));
 });
