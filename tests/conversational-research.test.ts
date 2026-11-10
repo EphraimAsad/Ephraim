@@ -64,3 +64,29 @@ test("public documentation and desktop placeholders contain no procedure identif
     assert.doesNotMatch(content,/\bTP\s*[- ]?\d+/i);
   }
 });
+
+test("synthetic end-to-end comparison assembles only approved local and public evidence",()=>{
+  const db=new KnowledgeStore(":memory:");
+  try{
+    const admin=db.createAccount("synthetic_admin","strong-password-451","admin");
+    const analyst=db.createAccount("synthetic_reader","strong-password-452","user");
+    const hidden=db.addDocument(admin.id,"Hidden.txt","PRIV-900","private",[{page:1,text:"Confidential example method A"}],null);
+    const earlier=db.addDocument(admin.id,"PublicExample.txt","DOC-001","shared",[{page:1,text:"Old procedure uses synthetic reagent Alpha"}],null);
+    const current=db.addDocument(admin.id,"PublicExample.txt","DOC-001","shared",[{page:3,text:"Synthetic method detects analyte using reagent Beta"}],null);
+    const question="How does DOC-001 for an analyte compare against published methods?";
+    const named=db.findDocument(analyst.id,question);
+    assert.equal(named?.id,current);
+    const plan=planResearch(question,[],{webEnabled:true,namedReference:named?.reference,
+      localReferences:db.getApprovedReferences(analyst.id),hasLocalDocuments:true});
+    assert.equal(plan.mode,"combined");
+    assert.ok(plan.webQueries.every(q=>!q.includes("DOC-001")));
+    const local=selectPassages(db.documentChunks(analyst.id,current),question,7);
+    const evidence=composeEvidence(local,[{title:"Synthetic public reference",url:"https://example.org/method",snippet:"External method uses synthetic reagent Gamma",publishedDate:"2026-05-01"}]);
+    assert.match(evidence,/reagent Beta/);
+    assert.match(evidence,/reagent Gamma/);
+    assert.doesNotMatch(evidence,/Confidential example/);
+    assert.doesNotMatch(evidence,/reagent Alpha/);
+    assert.equal(db.canReadDocument(analyst.id,earlier),false);
+    assert.equal(db.canReadDocument(analyst.id,hidden),false);
+  }finally{db.close();}
+});
