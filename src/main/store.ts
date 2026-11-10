@@ -143,14 +143,15 @@ export class KnowledgeStore {
       this.db.exec("COMMIT");
     } catch(e) { this.db.exec("ROLLBACK");throw e; }
   }
-  getUserPreference(owner:number,name:"theme"|"maxTokens"):string|null {
+  getUserPreference(owner:number,name:"theme"|"maxTokens"|"contextSize"):string|null {
     if(!validId(owner))throw new Error("Invalid account");
     return this.getSetting("user."+owner+"."+name);
   }
-  setUserPreference(owner:number,name:"theme"|"maxTokens",value:string):void {
+  setUserPreference(owner:number,name:"theme"|"maxTokens"|"contextSize",value:string):void {
     if(!validId(owner))throw new Error("Invalid account");
     if(name==="theme"&&!["light","dark","system"].includes(value))throw new Error("Invalid theme");
     if(name==="maxTokens"&&!["256","512","900","1500","2048"].includes(value))throw new Error("Invalid maximum tokens");
+    if(name==="contextSize"&&!["4096","8192","16384","32768"].includes(value))throw new Error("Invalid context size");
     this.setSetting("user."+owner+"."+name,value);
   }
   listConversations(owner:number) {
@@ -161,7 +162,7 @@ export class KnowledgeStore {
   }
   getMessages(owner:number,cid:number) {
     this.ownsConversation(owner,cid);
-    return readRows(this.db,"SELECT id,role,text,created FROM v2_messages WHERE conversation_id=? ORDER BY id LIMIT 100",cid);
+    return readRows(this.db,"SELECT id,role,text,created FROM v2_messages WHERE conversation_id=? ORDER BY id",cid);
   }
   addMessage(owner:number,cid:number,role:"user"|"assistant",text:string) {
     this.ownsConversation(owner,cid);
