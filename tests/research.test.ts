@@ -29,6 +29,6 @@ test("streaming is request scoped and external research still requires native co
  assert.match(main,/active\?\.id===u\.id/);
  assert.match(main,/requestId,conversationId,chunk/);
  assert.match(main,/dialog\.showMessageBox/);
- assert.ok(main.indexOf("consent.response!==0")<main.indexOf("tavilySearch(question,key)"));
+ assert.ok(main.indexOf("consent.response!==0")<main.indexOf("tavilySearch(query,key)"));
  assert.match(preload,/removeListener\("chat:chunk"/);
 });
