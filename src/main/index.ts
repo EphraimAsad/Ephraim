@@ -288,7 +288,7 @@ function bindIPC(){
         },false);
         const cite=(chunks:SourceChunk[])=>chunks.map(c=>{
           if(!tracked.has(c.id))tracked.set(c.id,c);
-          return {label:"[D"+Array.from(tracked.keys()).indexOf(c.id)+1+"]",documentId:c.documentId,
+          return {label:"[D"+(Array.from(tracked.keys()).indexOf(c.id)+1)+"]",documentId:c.documentId,
             reference:c.reference,version:c.version,page:c.page,section:c.section,text:c.excerpt.slice(0,780)};
         });
         response=await generateWithTools(modelPath,question,recent,gate,{
