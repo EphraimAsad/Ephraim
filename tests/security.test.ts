@@ -5,9 +5,9 @@ test("renderer is sandboxed and navigation disabled",()=>{
  const s=readFileSync("src/main/index.ts","utf8");
  for(const field of ["contextIsolation:true","sandbox:true","nodeIntegration:false","setWindowOpenHandler","will-navigate","requireAdmin()"])assert.ok(s.includes(field),field);
 });
-test("web sends literal question only, never retrieved context",()=>{
+test("web sends only approved public queries, never retrieved private passages",()=>{
  const s=readFileSync("src/main/index.ts","utf8");
- assert.match(s,/tavilySearch\(question,key\)/);
+ assert.match(s,/tavilySearch\(query,key\)/);
  assert.doesNotMatch(s,/tavilySearch\(privateSource/);
 });
 test("messages are tied to owner conversation",()=>{
@@ -20,5 +20,5 @@ test("External search requires native main-process consent",()=>{
  const main=readFileSync("src/main/index.ts","utf8");
  assert.ok(main.includes("dialog.showMessageBox(window!"));
  assert.ok(main.includes("if(consent.response!==0)"));
- assert.ok(main.indexOf("if(consent.response!==0)")<main.indexOf("tavilySearch(question,key)"));
+ assert.ok(main.indexOf("if(consent.response!==0)")<main.indexOf("tavilySearch(query,key)"));
 });
