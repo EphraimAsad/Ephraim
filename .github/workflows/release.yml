@@ -53,6 +53,7 @@ jobs:
         run: |
           curl --fail --location --retry 3 --silent --show-error 'https://huggingface.co/tensorblock/SmolLM2-135M-Instruct-GGUF/resolve/main/SmolLM2-135M-Instruct-Q2_K.gguf' -o /tmp/test.gguf
           node scripts/gguf-smoke.mjs /tmp/test.gguf
+          npx tsx scripts/conversation-smoke.ts /tmp/test.gguf
       - name: Test local GGUF embeddings
         shell: bash
         run: |
