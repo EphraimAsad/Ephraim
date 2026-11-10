@@ -8,6 +8,11 @@ import { tavilySearch } from "./search";
 import { formatWebResults, safeWebUrl, type WebResult } from "../core/research";
 import { hierarchicalSummary, isSummaryRequest } from "../core/knowledge";
 
+function uiTrace(phase:string):void {
+  if(!process.argv.includes("--ephraim-ui-self-test"))return;
+  const file=process.env.EPHRAIM_UI_TEST_TRACE_FILE;
+  if(file)try{ appendFileSync(file,phase+"\n","utf8"); }catch{}
+}
 function smokeTrace(phase:string):void {
   const trace=process.env.EPHRAIM_TEST_TRACE_FILE;
   if(trace && process.argv.includes("--ephraim-self-test")) {
@@ -243,6 +248,7 @@ function bindIPC(){
   });
 }
 app.whenReady().then(async()=>{
+  uiTrace("electron-ready");
   smokeTrace("electron-ready");
   if(process.argv.includes("--ephraim-self-test")) {
     smokeTrace("test-flag-recognised");
@@ -262,24 +268,41 @@ app.whenReady().then(async()=>{
     }
     return;
   }
+  uiTrace("before-store");
   mkdirSync(app.getPath("userData"),{recursive:true,mode:0o700});
   db=new KnowledgeStore(join(app.getPath("userData"),"ephraim.sqlite"));
   // Existing keys from v0.1 remain encrypted in the previous 'tavily' setting.
   // Do not transmit, re-encrypt, or log anything without explicit admin action.
+  uiTrace("before-bindIPC");
   bindIPC();
   if(process.argv.includes("--ephraim-ui-self-test")) {
     ipcMain.handle("diagnostic:uiReady",event=>{
       if(!window || event.sender.id!==window.webContents.id)throw new Error("Invalid renderer");
       const marker=process.env.EPHRAIM_UI_TEST_MARKER_FILE;
       if(!marker)throw new Error("UI test marker is not configured");
+      uiTrace("renderer-react-ready");
       writeFileSync(marker,"PASS","utf8");
       app.exit(0);
       return true;
     });
   }
+  uiTrace("before-browser");
   window=new BrowserWindow({
     width:1260,height:850,minWidth:920,minHeight:650,show:false,
-    webPreferences:{preload:join(__dirname,"../preload/index.js"),sandbox:true,contextIsolation:true,nodeIntegration:false,webSecurity:true}
+    webPreferences:{preload:join(__dirname,"../preload/index.cjs"),sandbox:true,contextIsolation:true,nodeIntegration:false,webSecurity:true}
+  });
+  uiTrace("browser-created");
+  window.webContents.on("dom-ready",()=>uiTrace("dom-ready"));
+  window.webContents.on("did-finish-load",()=>uiTrace("did-finish-load"));
+  window.webContents.on("preload-error",(_event,_path,error)=>{
+    const clean=String(error?.message??"unknown").replace(/(?:[A-Za-z]:\\|\/home\/)[^\s]*/g,"[local-path]").slice(0,160);
+    uiTrace("preload-error: "+clean);
+  });
+  window.webContents.on("console-message",(_event,level,message)=>{
+    if(level>=3){
+      const clean=String(message??"unknown").replace(/(?:[A-Za-z]:\\|\/home\/)[^\s]*/g,"[local-path]").slice(0,160);
+      uiTrace("renderer-console-error: "+clean);
+    }
   });
   window.setMenuBarVisibility(false);
   window.webContents.setWindowOpenHandler(()=>({action:"deny"}));
@@ -287,16 +310,18 @@ app.whenReady().then(async()=>{
   window.webContents.session.setPermissionRequestHandler((_wc,_p,callback)=>callback(false));
   window.once("ready-to-show",()=>window?.show());
   window.webContents.on("did-fail-load",(_event,errorCode,errorDescription)=>{
+    uiTrace("did-fail-load-code-"+errorCode);
     if(errorCode!==-3) {
       console.error("Ephraim renderer load failed ("+errorCode+"): "+errorDescription);
     }
   });
   window.webContents.on("render-process-gone",(_event,details)=>{
+    uiTrace("render-process-gone-"+details.reason);
     console.error("Ephraim interface process exited: "+details.reason);
   });
   const load=(!app.isPackaged&&process.env.ELECTRON_RENDERER_URL)
     ? window.loadURL(process.env.ELECTRON_RENDERER_URL)
     : window.loadFile(join(__dirname,"../renderer/index.html"));
-  void load.catch(()=>console.error("Ephraim could not load its desktop interface."));
+  void load.catch(()=>{uiTrace("load-rejected");console.error("Ephraim could not load its desktop interface.");});
 });
 app.on("window-all-closed",()=>app.quit());
