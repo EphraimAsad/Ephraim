@@ -172,13 +172,14 @@ function bindIPC(){
     db.deleteConversation(u.id,id);return true;
   });
   handler("settings:preferences",()=>{
-    const u=requireAuth();return {theme:db.getUserPreference(u.id,"theme")??"dark",maxTokens:Number(db.getUserPreference(u.id,"maxTokens")??"900")};
+    const u=requireAuth();return {theme:db.getUserPreference(u.id,"theme")??"dark",maxTokens:Number(db.getUserPreference(u.id,"maxTokens")??"900"),contextSize:Number(db.getUserPreference(u.id,"contextSize")??"4096")};
   });
-  handler("settings:preferences:update",(theme:string,maxTokens:number)=>{
+  handler("settings:preferences:update",(theme:string,maxTokens:number,contextSize=4096)=>{
     const u=requireAuth();
-    if(!["dark","light","system"].includes(theme)||![256,512,900,1500,2048].includes(maxTokens))throw new Error("Unsupported preference");
+    if(!["dark","light","system"].includes(theme)||![256,512,900,1500,2048].includes(maxTokens)||![4096,8192,16384,32768].includes(contextSize))throw new Error("Unsupported preference");
     db.setUserPreference(u.id,"theme",theme);
     db.setUserPreference(u.id,"maxTokens",String(maxTokens));
+    db.setUserPreference(u.id,"contextSize",String(contextSize));
     return true;
   });
   handler("web:open",async(raw:string)=>{
@@ -196,7 +197,7 @@ function bindIPC(){
     const u=requireAuth();
     if(!validText(question,4000)||!validId(modelId)||!validId(conversationId)||typeof useWeb!=="boolean"||typeof agentMode!=="boolean")throw new Error("Invalid chat request");
     // Before model or search activity, confirm caller owns the conversation.
-    const previous=db.getMessages(u.id,conversationId).slice(-8).map(m=>({role:m.role as "user"|"assistant",text:String(m.text)}));
+    const previous=db.getMessages(u.id,conversationId).map(m=>({role:m.role as "user"|"assistant",text:String(m.text)}));
     if(chatBusy)throw new Error("A response is already being generated");
     chatBusy=true;
     const controller=new AbortController();
@@ -204,7 +205,7 @@ function bindIPC(){
     const stream=(chunk:string)=>{
       if(!controller.signal.aborted && active?.id===u.id && window&&!window.isDestroyed())window.webContents.send("chat:chunk",{requestId,conversationId,chunk});
     };
-    const options={maxTokens:Number(db.getUserPreference(u.id,"maxTokens")??"900"),onChunk:stream,signal:controller.signal};
+    const options={maxTokens:Number(db.getUserPreference(u.id,"maxTokens")??"900"),contextSize:Number(db.getUserPreference(u.id,"contextSize")??"4096"),onChunk:stream,signal:controller.signal};
     try {
       const modelPath=db.modelForUse(modelId,"chat");
       const named=db.findDocument(u.id,question);
@@ -248,7 +249,7 @@ function bindIPC(){
       } else if(summarizeNamed) {
         sources=db.documentChunks(u.id,named!.id);
         response=await hierarchicalSummary(sources.map((c,i)=>sourceLabel(c,i)+"\n"+c.excerpt),async(text,instruction)=>{
-          return generate(modelPath,instruction,text,[],instruction.includes("Summarise the complete document")?options:{maxTokens:options.maxTokens,signal:controller.signal});
+          return generate(modelPath,instruction,text,instruction.includes("Summarise the complete document")?previous:[],instruction.includes("Summarise the complete document")?options:{maxTokens:options.maxTokens,contextSize:options.contextSize,signal:controller.signal});
         },6500);
       } else {
         let queryEmbedding:undefined|{modelId:number;vector:number[]};
