@@ -78,7 +78,7 @@ Import a chat GGUF, select it, and ask a general question. Web search remains of
 
 Ephraim supports Tavily through a user-provided key. A local administrator configures this key in **Settings**, where it is encrypted using OS-backed credential encryption when available.
 
-**External research is off by default.** Each proposed search requires a native confirmation dialog showing the **exact outgoing query**. Ephraim may rephrase the user's own recent questions to resolve follow-up references, but does not intentionally send indexed document passages, account chat history, or generated conversation summaries to the search provider. The provider may also retrieve selected public result pages. Always review each outgoing query carefully: user-entered sensitive details might still appear in it.
+**External research is off by default.** Each proposed search requires a native confirmation dialog showing the **exact outgoing query**. Ephraim may combine text from the user's recent messages to resolve follow-up references. Therefore an approved query can contain parts of previous user messages; it does not include complete conversation transcripts, indexed document passages, or generated conversation summaries. The provider may also retrieve selected public result pages. Always review each outgoing query carefully: user-entered sensitive details might still appear in it.
 
 The Tavily account and any applicable usage limits are managed independently of Ephraim. No paid service is required for local chat/RAG.
 
