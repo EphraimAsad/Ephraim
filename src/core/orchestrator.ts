@@ -48,7 +48,9 @@ export function planResearch(
   options:{webEnabled:boolean;namedReference?:string|null;localReferences?:readonly string[];hasLocalDocuments:boolean}
 ):ResearchPlan {
   const named=!!options.namedReference;
-  const recentlyLocal=localWords.test(recentUserTopic(history));
+  const previousTopic=recentUserTopic(history);
+  const recentlyLocal=localWords.test(previousTopic)||
+    (options.localReferences??[]).some(ref=>ref.length>=4&&previousTopic.toLowerCase().includes(ref.toLowerCase()));
   const wantLocal=named || localWords.test(question) || (followup.test(question)&&recentlyLocal);
   const wantWeb=options.webEnabled&&(external.test(question) || (compare.test(question)&&(wantLocal||options.hasLocalDocuments)));
   const summary=/\b(summarise|summarize|summary|recap)\b/i.test(question)&&named;
