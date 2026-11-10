@@ -219,6 +219,7 @@ function bindIPC(){
     let searchedQueries:string[]=[];
     let mode="chat";
     let invalidCitations:string[]=[];
+    let researchWarnings:string[]=[];
     try {
       const modelPath=db.modelForUse(modelId,"chat");
       const named=db.findDocument(u.id,question);
@@ -265,8 +266,13 @@ function bindIPC(){
           });
           if(consent.response!==0)continue;
           searchedQueries.push(query);
-          const rows=await tavilySearch(query,key);
-          for(const row of rows)if(!combined.has(row.url))combined.set(row.url,row);
+          try{
+            const rows=await tavilySearch(query,key);
+            for(const row of rows)if(!combined.has(row.url))combined.set(row.url,row);
+          }catch(error){
+            if(controller.signal.aborted)throw error;
+            researchWarnings.push("A public search failed. Its results were not used.");
+          }
         }
         const found=[...combined.values()].slice(0,5);
         if(found.length>0){
@@ -321,11 +327,16 @@ function bindIPC(){
             }
             for(const chunk of db.retrieve(u.id,query,queryEmbedding,12))pool.set(chunk.id,chunk);
           }
-          sources=selectPassages([...pool.values()],question+" "+(named?.reference??""),8);
+          const limit=options.contextSize<=4096?2:options.contextSize<=8192?4:7;
+          sources=selectPassages([...pool.values()],question+" "+(named?.reference??""),limit);
           toolsUsed.push("search_documents");
         }
         if(plan.needWeb&&plan.webQueries.length){
-          webResults=await searchPublic();
+          try{webResults=await searchPublic();}catch(error){
+            if(controller.signal.aborted)throw error;
+            researchWarnings.push("Public research was unavailable. The answer may use local evidence only.");
+          }
+          webResults=webResults.slice(0,options.contextSize<=4096?2:options.contextSize<=8192?3:5);
           if(searchedQueries.length)toolsUsed.push("search_public_web");
         }
         const evidence=composeEvidence(sources,webResults);
@@ -353,7 +364,7 @@ function bindIPC(){
       return {answer:response,citations:sources.map((s,i)=>({
         label:"D"+(i+1),documentId:s.documentId,chunkId:s.id,title:s.title,
         reference:s.reference,version:s.version,page:s.page,section:s.section,excerpt:s.excerpt.slice(0,450)
-      })),webResults,searchedWeb:searchedQueries.length>0,toolsUsed,searchedQueries,researchMode:mode,invalidCitations,contextUsage:usage};
+      })),webResults,searchedWeb:searchedQueries.length>0,toolsUsed,searchedQueries,researchMode:mode,invalidCitations,researchWarnings,contextUsage:usage};
     }finally{chatBusy=false;runningChat=null;}
   });
   handler("settings:status",async()=>{requireAuth();return {hasWebKey:!!(await getKey()),secureStorage:await searchEncryptionAvailable()};});
