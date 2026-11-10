@@ -21,20 +21,20 @@ test("users cannot access another user's private conversation or messages",()=>{
 test("private document and chunks are not exposed to other accounts; shared approved documents are",()=>{
  const {store,admin,alice,bob}=setup();
  const privateId=store.addDocument(admin.id,"Private notes.txt","PRIV 100","private",[{page:1,text:"Lab secret dilution 919123"}],null);
- const sharedId=store.addDocument(admin.id,"Shared.txt","TP 4122","shared",[{page:3,text:"Incubation at 37C for 42 hours"}],null);
+ const sharedId=store.addDocument(admin.id,"Shared.txt","DOC-001","shared",[{page:3,text:"Incubation at 37C for 42 hours"}],null);
  assert.equal(store.listDocuments(alice.id).some(d=>d.id===privateId),false);
  assert.equal(store.listDocuments(alice.id).some(d=>d.id===sharedId),true);
  assert.throws(()=>store.documentChunks(bob.id,privateId),/not available/);
  assert.equal(store.retrieve(bob.id,"secret dilution 919123").length,0);
- assert.equal(store.findDocument(alice.id,"Summarise TP 4122")?.id,sharedId);
+ assert.equal(store.findDocument(alice.id,"Summarise DOC-001")?.id,sharedId);
  assert.ok(store.retrieve(bob.id,"incubation hours").some(c=>c.documentId===sharedId));
  store.close();
 });
 test("document versioning supersedes old revisions; newer version is used",()=>{
  const {store,admin,bob}=setup();
- const old=store.addDocument(admin.id,"SOP.txt","TP 4122","shared",[{page:1,text:"Old reagent code ABCD"}],null);
- const current=store.addDocument(admin.id,"SOP.txt","TP 4122","shared",[{page:2,text:"New reagent code EFGH"}],null);
- assert.equal(store.findDocument(bob.id,"Summarise TP 4122")?.id,current);
+ const old=store.addDocument(admin.id,"SOP.txt","DOC-001","shared",[{page:1,text:"Old reagent code ABCD"}],null);
+ const current=store.addDocument(admin.id,"SOP.txt","DOC-001","shared",[{page:2,text:"New reagent code EFGH"}],null);
+ assert.equal(store.findDocument(bob.id,"Summarise DOC-001")?.id,current);
  assert.equal(store.documentChunks(admin.id,current)[0].page,2);
  assert.equal(store.canReadDocument(bob.id,old),false);
  assert.equal(store.canReadDocument(bob.id,old,true),true);

@@ -53,6 +53,7 @@ jobs:
         run: |
           curl --fail --location --retry 3 --silent --show-error 'https://huggingface.co/tensorblock/SmolLM2-135M-Instruct-GGUF/resolve/main/SmolLM2-135M-Instruct-Q2_K.gguf' -o /tmp/test.gguf
           node scripts/gguf-smoke.mjs /tmp/test.gguf
+          npx tsx scripts/conversation-smoke.ts /tmp/test.gguf
       - name: Test local GGUF embeddings
         shell: bash
         run: |
@@ -66,7 +67,7 @@ jobs:
       contents: write
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      RELEASE_TAG: v0.1.0-beta.3
+      RELEASE_TAG: v0.2.0-beta.1
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -76,7 +77,7 @@ jobs:
         shell: pwsh
         run: |
           $version = (Get-Content 'package.json' -Raw | ConvertFrom-Json).version
-          if ($version -ne '0.1.0-beta.3') { throw 'Wrong package version' }
+          if ($version -ne '0.2.0-beta.1') { throw 'Wrong package version' }
           if ($env:RELEASE_TAG -ne "v$version") { throw 'Release tag mismatch' }
           $existing = gh release list --repo $env:GITHUB_REPOSITORY --limit 100 --json tagName | ConvertFrom-Json
           if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect existing releases' }
@@ -156,5 +157,5 @@ jobs:
             throw 'Release tag already exists; refusing to overwrite immutable release assets.'
           }
           $installer = Get-ChildItem -Path 'release' -Filter '*.exe' -File | Where-Object { $_.Name -notlike '*uninstaller*' } | Select-Object -First 1
-          gh release create $env:RELEASE_TAG $installer.FullName 'release/SHA256SUMS.txt' --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title 'Ephraim v0.1.0 Beta 3' --notes-file RELEASE_NOTES.md --prerelease
+          gh release create $env:RELEASE_TAG $installer.FullName 'release/SHA256SUMS.txt' --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title 'Ephraim v0.2.0 Beta 1' --notes-file RELEASE_NOTES.md --prerelease
           if ($LASTEXITCODE -ne 0) { throw 'GitHub Release publishing failed' }

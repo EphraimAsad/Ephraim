@@ -24,6 +24,7 @@ export class KnowledgeStore {
       "CREATE TABLE IF NOT EXISTS v2_meta(key TEXT PRIMARY KEY,value TEXT NOT NULL);",
       "CREATE TABLE IF NOT EXISTS v2_conversations(id INTEGER PRIMARY KEY, owner_id INTEGER NOT NULL REFERENCES accounts(id), title TEXT NOT NULL, created TEXT DEFAULT CURRENT_TIMESTAMP);",
       "CREATE TABLE IF NOT EXISTS v2_messages(id INTEGER PRIMARY KEY, conversation_id INTEGER NOT NULL REFERENCES v2_conversations(id), role TEXT NOT NULL CHECK(role IN ('user','assistant')), text TEXT NOT NULL, created TEXT DEFAULT CURRENT_TIMESTAMP);",
+       "CREATE TABLE IF NOT EXISTS v2_conversation_memory(conversation_id INTEGER PRIMARY KEY REFERENCES v2_conversations(id), last_message_id INTEGER NOT NULL, summary TEXT NOT NULL, updated TEXT DEFAULT CURRENT_TIMESTAMP);",
       "CREATE INDEX IF NOT EXISTS idx_v2_conversations_owner ON v2_conversations(owner_id);",
       "CREATE TABLE IF NOT EXISTS v2_documents(id INTEGER PRIMARY KEY, owner_id INTEGER NOT NULL REFERENCES accounts(id), visibility TEXT NOT NULL CHECK(visibility IN ('private','shared')), status TEXT NOT NULL CHECK(status IN ('draft','approved','superseded')), title TEXT NOT NULL, reference TEXT NOT NULL, version INTEGER NOT NULL, content_hash TEXT NOT NULL, source_path TEXT, pages INTEGER NOT NULL, size INTEGER NOT NULL, imported TEXT DEFAULT CURRENT_TIMESTAMP);",
       "CREATE INDEX IF NOT EXISTS idx_v2_docs_owner ON v2_documents(owner_id,visibility,status);",
@@ -138,6 +139,7 @@ export class KnowledgeStore {
     this.ownsConversation(owner,id);
     this.db.exec("BEGIN IMMEDIATE");
     try {
+      this.db.prepare("DELETE FROM v2_conversation_memory WHERE conversation_id=?").run(id);
       this.db.prepare("DELETE FROM v2_messages WHERE conversation_id=?").run(id);
       this.db.prepare("DELETE FROM v2_conversations WHERE id=? AND owner_id=?").run(id,owner);
       this.db.exec("COMMIT");
@@ -163,6 +165,20 @@ export class KnowledgeStore {
   getMessages(owner:number,cid:number) {
     this.ownsConversation(owner,cid);
     return readRows(this.db,"SELECT id,role,text,created FROM v2_messages WHERE conversation_id=? ORDER BY id",cid);
+  }
+  getConversationMemory(owner:number,cid:number):{lastMessageId:number;summary:string}|null {
+    this.ownsConversation(owner,cid);
+    const row=this.db.prepare("SELECT last_message_id,summary FROM v2_conversation_memory WHERE conversation_id=?").get(cid) as Row|undefined;
+    return row?{lastMessageId:Number(row.last_message_id),summary:String(row.summary)}:null;
+  }
+  saveConversationMemory(owner:number,cid:number,lastMessageId:number,summary:string):void {
+    this.ownsConversation(owner,cid);
+    if(!validId(lastMessageId)||summary.length>12000)throw new Error("Invalid conversation memory");
+    if(!this.db.prepare("SELECT 1 FROM v2_messages WHERE id=? AND conversation_id=?").get(lastMessageId,cid))throw new Error("Memory checkpoint missing");
+    this.db.prepare("INSERT INTO v2_conversation_memory(conversation_id,last_message_id,summary) VALUES(?,?,?) ON CONFLICT(conversation_id) DO UPDATE SET last_message_id=excluded.last_message_id,summary=excluded.summary,updated=CURRENT_TIMESTAMP WHERE excluded.last_message_id>v2_conversation_memory.last_message_id").run(cid,lastMessageId,summary);
+  }
+  getApprovedReferences(owner:number):string[] {
+    return this.listDocuments(owner).filter(d=>d.status==="approved").map(d=>d.reference);
   }
   addMessage(owner:number,cid:number,role:"user"|"assistant",text:string) {
     this.ownsConversation(owner,cid);
@@ -220,7 +236,7 @@ export class KnowledgeStore {
     if(!Array.isArray(vector)||vector.length<2||vector.length>8192||!vector.every(Number.isFinite))throw new Error("Invalid embedding vector");
     this.db.prepare("UPDATE v2_chunks SET embedding_model=?,embedding=? WHERE id=?").run(modelId,JSON.stringify(vector),chunkId);
   }
-  retrieve(owner:number,question:string,queryEmbedding?:{modelId:number;vector:number[]}):SourceChunk[] {
+  retrieve(owner:number,question:string,queryEmbedding?:{modelId:number;vector:number[]},limit=6):SourceChunk[] {
     const tokens=Array.from(new Set((question.toLowerCase().match(/[\p{L}\p{N}]{3,}/gu)||[]))).slice(0,10);
     const words=tokens.map(t=>'"'+t.replace(/"/g,"")+'"').join(" OR ");
     const candidates=new Map<number,{chunk:SourceChunk;lexical:number;embedding:number[]|null}>();
@@ -235,7 +251,7 @@ export class KnowledgeStore {
         candidates.set(id,{chunk:row as unknown as SourceChunk,lexical:previous?.lexical??0,embedding:JSON.parse(String(row.embedding)) as number[]});
       }
     }
-    const rank=rerank(Array.from(candidates.values()).map(c=>({id:c.chunk.id,text:c.chunk.excerpt,lexical:c.lexical,embedding:c.embedding})),queryEmbedding?.vector,6);
+    const rank=rerank(Array.from(candidates.values()).map(c=>({id:c.chunk.id,text:c.chunk.excerpt,lexical:c.lexical,embedding:c.embedding})),queryEmbedding?.vector,Math.max(1,Math.min(20,limit)));
     return rank.map(r=>candidates.get(r.id)!.chunk);
   }
   getSetting(key:string):string|null {

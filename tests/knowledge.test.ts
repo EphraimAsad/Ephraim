@@ -10,10 +10,10 @@ test("chunking preserves page metadata and overlaps",()=>{
  assert.equal(chunks[0].text.slice(-100),chunks[1].text.slice(0,100));
 });
 test("named procedure matches exact reference and latest version",()=>{
- const refs=[{id:1,title:"Procedure",reference:"TP 4122",version:2},{id:2,title:"Procedure",reference:"TP 4122",version:3},{id:3,title:"Other",reference:"TP 412",version:5}];
- assert.equal(findNamedDocument("Summarise TP 4122 in detail",refs)?.id,2);
- assert.equal(findNamedDocument("Summarise TP 41220",refs),null);
- assert.ok(isSummaryRequest("Summarize TP 4122"));
+ const refs=[{id:1,title:"Procedure",reference:"DOC-001",version:2},{id:2,title:"Procedure",reference:"DOC-001",version:3},{id:3,title:"Other",reference:"DOC-00",version:5}];
+ assert.equal(findNamedDocument("Summarise DOC-001 in detail",refs)?.id,2);
+ assert.equal(findNamedDocument("Summarise DOC-0010",refs),null);
+ assert.ok(isSummaryRequest("Summarize DOC-001"));
 });
 test("hybrid rank prefers semantic match when available",()=>{
  const ranked=rerank([{id:1,text:"irrelevant",lexical:.2,embedding:[1,0]},{id:2,text:"other",lexical:.9,embedding:[0,1]}],[1,0],2);
