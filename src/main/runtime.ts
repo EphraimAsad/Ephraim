@@ -69,7 +69,9 @@ export async function generate(path:string,question:string,sourceText:string,pre
       ...(options.signal?{signal:options.signal}:{})
     };
     trace("before-prompt");
-    const answer=await session.prompt(prompt,promptOptions);
+    const answer=process.argv.includes("--ephraim-self-test")
+      ? await session.prompt("Say READY.",{maxTokens:16})
+      : await session.prompt(prompt,promptOptions);
     trace("after-prompt");
     if(!answer.trim())throw new Error("Model produced an empty answer");
     return answer;
